@@ -17,24 +17,17 @@
  */
 package org.omnirom.omnigerrit.retrofit
 
-import org.omnirom.omnigerrit.model.Change
+import okhttp3.ResponseBody
+import org.omnirom.omnigerrit.model.BuildImage
+import retrofit2.Call
 import retrofit2.Response
 import retrofit2.http.GET
+import retrofit2.http.HEAD
 import retrofit2.http.Path
-import retrofit2.http.Query
+import retrofit2.http.Streaming
 
 
-interface GerritApi {
-    @GET("changes/")
-    suspend fun getChanges(
-        @Query("q", encoded=true) params: String,
-        @Query("n") limit: String = "10",
-        @Query("S") offset: String = "0",
-        @Query("o") options: List<String> = listOf()
-    ): Response<List<Change>>
-
-    @GET("changes/{id}/detail")
-    suspend fun getChange(
-        @Path("id") id: String,
-    ): Response<Change>
+interface OmniOtaApi {
+    @GET("ota_info.php")
+    suspend fun getBuilds(): Response<Map<String, List<BuildImage>>>
 }

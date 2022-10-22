@@ -17,10 +17,13 @@
  */
 package org.omnirom.omniota.model
 
+import android.content.Context
 import com.google.gson.GsonBuilder
 import okhttp3.*
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.logging.HttpLoggingInterceptor
+import org.omnirom.omnigerrit.utils.BuildImageUtils
+import org.omnirom.omnigerrit.utils.LogUtils
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.io.IOException
@@ -29,7 +32,9 @@ import java.io.IOException
 object RetrofitManager {
     private val TAG = "RetrofitManager"
 
-    val baseUrl = "https:/gerrit.omnirom.org/"
+    val gerritBaseUrl = "https:/gerrit.omnirom.org/"
+    val otaBaseUrl = "https://dl.omnirom.org/"
+    var deviceRootDir: String? = null
 
     class GerritMagicHaderInterceptor : Interceptor {
         @Throws(IOException::class)
@@ -46,7 +51,7 @@ object RetrofitManager {
         }
     }
 
-    fun getInstance(): Retrofit {
+    fun getGerritInstance(): Retrofit {
         val loggingInterceptor = HttpLoggingInterceptor()
         loggingInterceptor.level = HttpLoggingInterceptor.Level.BASIC
 
@@ -58,8 +63,37 @@ object RetrofitManager {
             .setLenient()
             .create()
 
-        return Retrofit.Builder().baseUrl(baseUrl)
+        return Retrofit.Builder().baseUrl(gerritBaseUrl)
             .addConverterFactory(GsonConverterFactory.create(gson))
+            .client(oktHttpClient.build())
+            .build()
+    }
+
+    private fun getOtaBaseUrl(rootDir: String?): String {
+        if (rootDir != null && rootDir.isNotEmpty()) {
+            return "$otaBaseUrl$rootDir/"
+        }
+        return otaBaseUrl
+    }
+
+    fun getOtaInstance(): Retrofit {
+        if (deviceRootDir == null) {
+            BuildImageUtils.findDeviceRootDir()
+            LogUtils.d(TAG, "findDeviceRootDir = " + deviceRootDir)
+        }
+        val oktHttpClient = OkHttpClient.Builder()
+
+        return Retrofit.Builder().baseUrl(getOtaBaseUrl(deviceRootDir))
+            .addConverterFactory(GsonConverterFactory.create())
+            .client(oktHttpClient.build())
+            .build()
+    }
+
+    fun getOtaInstance(rootDir: String): Retrofit {
+        val oktHttpClient = OkHttpClient.Builder()
+
+        return Retrofit.Builder().baseUrl(getOtaBaseUrl(rootDir))
+            .addConverterFactory(GsonConverterFactory.create())
             .client(oktHttpClient.build())
             .build()
     }

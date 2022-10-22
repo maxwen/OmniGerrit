@@ -14,15 +14,18 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
-import androidx.compose.material3.*
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,19 +38,24 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
-import androidx.paging.compose.items
+import androidx.paging.compose.itemsIndexed
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.omnirom.omnigerrit.model.Change
 import org.omnirom.omnigerrit.model.MainViewModel
 import org.omnirom.omnigerrit.ui.theme.OmniGerritTheme
+import org.omnirom.omnigerrit.utils.BuildImageUtils
+import org.omnirom.omnigerrit.utils.LogUtils
 import org.omnirom.omniota.model.ConnectivityObserver
 import org.omnirom.omniota.model.NetworkActivityObserver
 import org.omnirom.omniota.model.RetrofitManager
 import java.text.DateFormat
+import java.text.SimpleDateFormat
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 class MainActivity : ComponentActivity() {
@@ -58,15 +66,30 @@ class MainActivity : ComponentActivity() {
     private val isConnected = MutableStateFlow<Boolean>(false)
     var bottomSheetExpanded = BottomSheetValue.Collapsed
     lateinit var bottomSheetScaffoldState: BottomSheetScaffoldState
-    val dateFormat = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
+    lateinit var localDateFormat: DateFormat
+    lateinit var gerritDataFormat: SimpleDateFormat
 
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        gerritDataFormat = SimpleDateFormat("yyyy-MM-dd HH:mm")
+        gerritDataFormat.timeZone = TimeZone.getTimeZone("UTC")
+
+        localDateFormat =
+            DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT, Locale.getDefault())
+        localDateFormat.timeZone = TimeZone.getDefault()
+
         lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.CREATED) {
                 connectivityObserver = NetworkActivityObserver(applicationContext)
+            }
+        }
+
+        lifecycleScope.launch {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.CREATED) {
+                // TODO must be done before any device filter of changes
+                LogUtils.d(TAG, "device builds = " + BuildImageUtils.getDeviceBuilds())
             }
         }
 
@@ -109,7 +132,6 @@ class MainActivity : ComponentActivity() {
                         })
                     {
                         Column(modifier = Modifier.padding(it)) {
-
                             BottomSheetScaffold(
                                 scaffoldState = bottomSheetScaffoldState,
                                 sheetPeekHeight = 0.dp,
@@ -117,12 +139,19 @@ class MainActivity : ComponentActivity() {
                                     Column(
                                         modifier = Modifier
                                             .heightIn(min = 200.dp)
-                                            .background(color = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp))
+                                            .background(
+                                                color = MaterialTheme.colorScheme.surfaceColorAtElevation(
+                                                    3.dp
+                                                )
+                                            )
                                             .padding(top = 12.dp, start = 10.dp, end = 10.dp)
                                     ) {
-                                        if (changeDetail.value != null) {
-                                            Column(modifier = Modifier.fillMaxWidth()) {
+                                        Column(modifier = Modifier.fillMaxWidth()) {
+                                            if (changeDetail.value != null) {
                                                 val change = changeDetail.value!!
+                                                val date = localDateFormat.format(
+                                                    gerritDataFormat.parse(change.updated)
+                                                )
                                                 Text(
                                                     text = change.subject
                                                 )
@@ -136,18 +165,18 @@ class MainActivity : ComponentActivity() {
                                                     text = "Branch:" + change.branch
                                                 )
                                                 Text(
-                                                    text = "Modified:" + dateFormat.format(change.getUpdatedInMillis())
+                                                    text = "Modified:" + date
                                                 )
-                                            }
 
-                                            Button(onClick = {
-                                                val uri = Uri.parse(
-                                                    RetrofitManager.baseUrl + "#/c/" + changeDetail.value!!._number
-                                                )
-                                                val intent = Intent(Intent.ACTION_VIEW, uri)
-                                                startActivity(intent)
-                                            }) {
-                                                Text(text = "Show")
+                                                Button(onClick = {
+                                                    val uri = Uri.parse(
+                                                        RetrofitManager.gerritBaseUrl + "#/c/" + changeDetail.value!!._number
+                                                    )
+                                                    val intent = Intent(Intent.ACTION_VIEW, uri)
+                                                    startActivity(intent)
+                                                }) {
+                                                    Text(text = "Show")
+                                                }
                                             }
                                         }
                                     }
@@ -163,7 +192,7 @@ class MainActivity : ComponentActivity() {
                                     Column() {
                                         changesPager =
                                             viewModel.changesPager!!.collectAsLazyPagingItems()
-                                        Changes(changesPager!!)
+                                        Changes(changesPager!!, changeDetail)
                                     }
                                 }
                             }
@@ -175,13 +204,27 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun Changes(changesPager: LazyPagingItems<Change>) {
+    fun Changes(changesPager: LazyPagingItems<Change>, changeDetail: State<Change?>) {
         Column(modifier = Modifier.padding(start = 10.dp, end = 10.dp)) {
             val connected = isConnected.collectAsState()
             if (connected.value) {
                 LazyColumn(modifier = Modifier.padding(top = 10.dp)) {
-                    items(items = changesPager) { change ->
-                        ChangeItem(change!!)
+                    itemsIndexed(items = changesPager) { index, change ->
+                        val selected =
+                            changeDetail.value != null && changeDetail.value!!.id == change!!.id
+                        ChangeItem(index, change!!, selected)
+                    }
+                    when {
+                        changesPager.loadState.refresh is LoadState.Loading -> {
+                            item { LoadingView(modifier = Modifier.fillParentMaxSize()) }
+                        }
+                        changesPager.loadState.append is LoadState.Loading -> {
+                            item { LoadingView(modifier = Modifier.fillParentMaxSize()) }
+                        }
+                        changesPager.loadState.refresh is LoadState.Error -> {
+                        }
+                        changesPager.loadState.append is LoadState.Error -> {
+                        }
                     }
                 }
             } else {
@@ -191,7 +234,7 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun ChangeItem(change: Change) {
+    fun ChangeItem(index: Int, change: Change, selected: Boolean) {
         val coroutineScope = rememberCoroutineScope()
         Row(
             modifier = Modifier
@@ -207,9 +250,19 @@ class MainActivity : ComponentActivity() {
                     }
                     viewModel.loadChange(change)
                 })
+                .background(
+                    if (selected) MaterialTheme.colorScheme.secondaryContainer else {
+                        MaterialTheme.colorScheme.background
+                    }
+                )
         ) {
-            Text(text = change.project, modifier = Modifier.width(140.dp), maxLines = 1)
-            Text(text = change.subject, modifier = Modifier.padding(start = 8.dp), maxLines = 1)
+            val date = localDateFormat.format(gerritDataFormat.parse(change.updated))
+            Text(text = date, modifier = Modifier.width(140.dp), maxLines = 1)
+            Text(
+                text = change.subject, modifier = Modifier
+                    .padding(start = 8.dp)
+                    .fillMaxWidth(), maxLines = 1
+            )
         }
     }
 
@@ -229,6 +282,19 @@ class MainActivity : ComponentActivity() {
                 textAlign = TextAlign.Center,
                 fontSize = 20.sp,
             )
+        }
+    }
+
+    @Composable
+    private fun LoadingView(
+        modifier: Modifier = Modifier
+    ) {
+        Column(
+            modifier = modifier,
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            CircularProgressIndicator()
         }
     }
 

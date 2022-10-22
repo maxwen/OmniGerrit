@@ -21,13 +21,17 @@ import androidx.paging.PagingSource
 import androidx.paging.PagingState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.omnirom.omnigerrit.utils.LogUtils
 
 class ChangesPagingSource(private val viewModel: MainViewModel) :
     PagingSource<Int, Change>() {
     val TAG = "ChangesPagingSource"
+    private var offset: Int = 0
 
     companion object {
         val STARTING_KEY = 0
+        val GERRIT_QUERY_LIMIT = 20
+        val PAGE_SIZE = 20
     }
 
     override suspend fun load(params: LoadParams<Int>): LoadResult<Int, Change> {
@@ -36,19 +40,8 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
                 // If params.key is null, it is the first load, so we start loading with STARTING_KEY
                 val startKey = params.key ?: STARTING_KEY
                 val pageIndex = startKey
-                val offset = pageIndex * params.loadSize
 
-                val queryResultList = mutableListOf<Change>()
-
-                val changes = viewModel.gerritApi.getChanges(
-                    viewModel.createQueryString(
-                        branch = "android-13.0",
-                        status = "merged"
-                    ), "10", offset = offset.toString()
-                )
-                if (changes.isSuccessful && changes.body() != null) {
-                    queryResultList.addAll(changes.body()!!)
-                }
+                val queryResultList = fillResultList()
 
                 val newCount = queryResultList.size
                 val prevKey = if (pageIndex == 0) null else pageIndex - 1
@@ -61,7 +54,7 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
                 )
             }
         } catch (e: Exception) {
-            Log.e(TAG, "load " + e.message, e)
+            LogUtils.e(TAG, "load " + e.message, e)
 
             LoadResult.Error(e)
         }
@@ -72,5 +65,25 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
             val anchorPage = state.closestPageToPosition(anchorPosition)
             anchorPage?.prevKey?.plus(1) ?: anchorPage?.nextKey?.minus(1)
         }
+    }
+
+    private suspend fun fillResultList(): List<Change> {
+        val queryResultList = mutableListOf<Change>()
+
+        while (queryResultList.size < 10) {
+            val changes = viewModel.gerritApi.getChanges(
+                ChangeFilter.createQueryString(), GERRIT_QUERY_LIMIT.toString(), offset = offset.toString()
+            )
+            if (changes.isSuccessful && changes.body() != null) {
+                val changeList = changes.body()!!
+                if (changeList.isEmpty()) {
+                    break
+                } else {
+                    queryResultList.addAll(changeList.filter { !it.project.startsWith("android_device_") })
+                    offset += GERRIT_QUERY_LIMIT
+                }
+            }
+        }
+        return queryResultList
     }
 }

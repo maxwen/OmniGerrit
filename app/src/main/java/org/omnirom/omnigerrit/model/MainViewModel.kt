@@ -1,6 +1,5 @@
 package org.omnirom.omnigerrit.model
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.Pager
@@ -13,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.omnirom.omnigerrit.retrofit.GerritApi
+import org.omnirom.omnigerrit.utils.LogUtils
 import org.omnirom.omniota.model.RetrofitManager
 
 class MainViewModel() : ViewModel() {
@@ -22,7 +22,7 @@ class MainViewModel() : ViewModel() {
     private val _changes = MutableStateFlow<List<Change>>(changeList)
     val changesFlow = _changes.asStateFlow()
     var changesPager: Flow<PagingData<Change>>? = null
-    val gerritApi: GerritApi = RetrofitManager.getInstance().create(GerritApi::class.java)
+    val gerritApi: GerritApi = RetrofitManager.getGerritInstance().create(GerritApi::class.java)
     private val _change = MutableStateFlow<Change?>(null)
     val changeFlow = _change.asStateFlow()
 
@@ -34,10 +34,7 @@ class MainViewModel() : ViewModel() {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 val changes = gerritApi.getChanges(
-                    params = createQueryString(
-                        branch = "android-13.0",
-                        status = "merged"
-                    ), "10", "0"
+                    params = ChangeFilter.createQueryString(), limit = "10", offset = "0"
                 )
                 if (changes.isSuccessful && changes.body() != null) {
                     _changes.value = changes.body()!!
@@ -46,21 +43,7 @@ class MainViewModel() : ViewModel() {
         }
     }
 
-    fun createQueryString(branch: String = "", project: String = "", status: String = ""): String {
-        val q = mutableListOf<String>()
-        if (branch.isNotEmpty()) {
-            q.add("branch:" + branch)
-        }
-        if (project.isNotEmpty()) {
-            q.add("project:" + project)
-        }
-        if (status.isNotEmpty()) {
-            q.add("status:" + status)
-        }
-        return q.joinToString(separator = "+")
-    }
-
-    fun getQueryOptionsList() : List<String> {
+    fun getQueryOptionsList(): List<String> {
         val optionsList = mutableListOf<String>()
         optionsList.add("CURRENT_REVISION")
         optionsList.add("CURRENT_COMMIT")
@@ -72,9 +55,9 @@ class MainViewModel() : ViewModel() {
     private fun initChangesPaging() {
         changesPager = Pager(
             config = PagingConfig(
-                pageSize = 25,
+                pageSize = ChangesPagingSource.PAGE_SIZE,
                 enablePlaceholders = false,
-                initialLoadSize = 25
+                initialLoadSize = ChangesPagingSource.PAGE_SIZE
             ),
             pagingSourceFactory = { ChangesPagingSource(this) }
         ).flow
@@ -83,10 +66,10 @@ class MainViewModel() : ViewModel() {
     fun loadChange(change: Change) {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                val change = gerritApi.getChange(changeId = change.change_id)
+                val change = gerritApi.getChange(id = change.id)
                 if (change.isSuccessful && change.body() != null) {
                     _change.value = change.body()!!
-                    Log.d(TAG, "change = " + changeFlow.value)
+                    LogUtils.d(TAG, "change = " + changeFlow.value)
                 }
             }
         }
