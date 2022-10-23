@@ -13,13 +13,22 @@ import androidx.annotation.Keep
 
 @Keep
 data class Change(
-    val id: String,
-    val project: String,
-    val branch: String,
-    val change_id: String,
-    val subject: String,
-    val status: String,
-    val created: String,
-    val updated: String,
-    val _number: String
-)
+    val id: String = "",
+    val project: String = "",
+    val branch: String = "",
+    val change_id: String = "",
+    val subject: String = "",
+    val status: String = "",
+    val created: String = "",
+    val updated: String = "",
+    val _number: String = ""
+) {
+    constructor(buildImage: BuildImage) : this(
+        subject = buildImage.filename,
+        updated = ChangeFilter.gerritDataFormat.format(buildImage.getBuildDateInMillis())
+    )
+
+    val updatedInMillis by lazy {
+        ChangeFilter.gerritDataFormat.parse(updated).time
+    }
+}

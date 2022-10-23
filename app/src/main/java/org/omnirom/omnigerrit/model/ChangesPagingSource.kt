@@ -16,7 +16,6 @@
 
 package org.omnirom.omnigerrit.model
 
-import android.util.Log
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
 import kotlinx.coroutines.Dispatchers
@@ -70,19 +69,59 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
     private suspend fun fillResultList(): List<Change> {
         val queryResultList = mutableListOf<Change>()
 
-        while (queryResultList.size < 10) {
+        while (queryResultList.size < PAGE_SIZE) {
             val changes = viewModel.gerritApi.getChanges(
-                ChangeFilter.createQueryString(), GERRIT_QUERY_LIMIT.toString(), offset = offset.toString()
+                ChangeFilter.createQueryString(),
+                GERRIT_QUERY_LIMIT.toString(),
+                offset = offset.toString()
             )
             if (changes.isSuccessful && changes.body() != null) {
                 val changeList = changes.body()!!
                 if (changeList.isEmpty()) {
                     break
                 } else {
-                    queryResultList.addAll(changeList.filter { !it.project.startsWith("android_device_") })
+                    //queryResultList.addAll(changeList.filter { it.project.startsWith("android_frameworks_base") })
+                    queryResultList.addAll(changeList)
                     offset += GERRIT_QUERY_LIMIT
                 }
             }
+        }
+        if (queryResultList.isNotEmpty() && viewModel.buildsTimestampList.isNotEmpty()) {
+            val addedBuilds = mutableListOf<Long>()
+            val queryResultListCopy = mutableListOf<Change>()
+            queryResultListCopy.addAll(queryResultList)
+            val firstChangeDate = queryResultListCopy.first().updatedInMillis
+            val lastChangeDate = queryResultListCopy.last().updatedInMillis
+            viewModel.buildsTimestampList.filter { buildTime -> buildTime > firstChangeDate }
+                .forEach { buildTime ->
+                    queryResultList.add(
+                        addedBuilds.size,
+                        Change(viewModel.buildsMap[buildTime]!!)
+                    )
+                    addedBuilds.add(buildTime)
+                }
+            viewModel.buildsTimestampList.removeAll(addedBuilds)
+
+            queryResultListCopy.forEachIndexed() { index, change ->
+                val changeTime = change.updatedInMillis
+                // [0,1,2,3,4,5]
+                // size = 6
+                // 4 -> 5
+                val nextChange =
+                    if (index <= queryResultListCopy.size - 2) queryResultListCopy[index + 1] else null
+                val nextChangeTime =
+                    nextChange?.updatedInMillis ?: 0L
+
+                viewModel.buildsTimestampList.filter { buildTime -> buildTime > lastChangeDate && buildTime in (nextChangeTime + 1) until changeTime }
+                    .forEach { buildTime ->
+                        queryResultList.add(
+                            index + addedBuilds.size + 1,
+                            Change(viewModel.buildsMap[buildTime]!!)
+                        )
+                        addedBuilds.add(buildTime)
+                    }
+            }
+            viewModel.buildsTimestampList.removeAll(addedBuilds)
         }
         return queryResultList
     }

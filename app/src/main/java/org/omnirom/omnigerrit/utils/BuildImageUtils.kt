@@ -40,13 +40,22 @@ object BuildImageUtils {
             if (reponse.isSuccessful && reponse.body() != null) {
                 val buildList = reponse.body()!!
                 if (buildList.containsKey(device)) {
-                    return buildList.get(device)!!
+                    val deviceBuilds = buildList[device]!!.filter { image ->
+                        image.getBuildType() == buildType && image.getVersion() == version
+                    }
+                    return deviceBuilds
                 }
             }
         } catch (e: Exception) {
             LogUtils.e(TAG, "getDeviceBuilds", e)
         }
         return listOf()
+    }
+
+    fun getDeviceBuildsMap(builds: List<BuildImage>) : Map<Long, BuildImage> {
+        val buildsMap = mutableMapOf<Long, BuildImage>()
+        builds.forEach { build ->  buildsMap.put(build.getBuildDateInMillis(), build)}
+        return buildsMap
     }
 
     private suspend fun scanDeviceBuilds(rootDir: String): Boolean {

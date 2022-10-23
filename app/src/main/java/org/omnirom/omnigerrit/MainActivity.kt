@@ -41,20 +41,19 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
-import androidx.paging.compose.itemsIndexed
+import androidx.paging.compose.items
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import org.omnirom.omnigerrit.model.BuildImage
 import org.omnirom.omnigerrit.model.Change
+import org.omnirom.omnigerrit.model.ChangeFilter
 import org.omnirom.omnigerrit.model.MainViewModel
 import org.omnirom.omnigerrit.ui.theme.OmniGerritTheme
-import org.omnirom.omnigerrit.utils.BuildImageUtils
-import org.omnirom.omnigerrit.utils.LogUtils
 import org.omnirom.omniota.model.ConnectivityObserver
 import org.omnirom.omniota.model.NetworkActivityObserver
 import org.omnirom.omniota.model.RetrofitManager
 import java.text.DateFormat
-import java.text.SimpleDateFormat
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
@@ -66,30 +65,22 @@ class MainActivity : ComponentActivity() {
     private val isConnected = MutableStateFlow<Boolean>(false)
     var bottomSheetExpanded = BottomSheetValue.Collapsed
     lateinit var bottomSheetScaffoldState: BottomSheetScaffoldState
+    lateinit var localDateTimeFormat: DateFormat
     lateinit var localDateFormat: DateFormat
-    lateinit var gerritDataFormat: SimpleDateFormat
 
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        gerritDataFormat = SimpleDateFormat("yyyy-MM-dd HH:mm")
-        gerritDataFormat.timeZone = TimeZone.getTimeZone("UTC")
-
-        localDateFormat =
+        localDateTimeFormat =
             DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT, Locale.getDefault())
-        localDateFormat.timeZone = TimeZone.getDefault()
+        localDateTimeFormat.timeZone = TimeZone.getDefault()
+        localDateFormat =
+            DateFormat.getDateInstance(DateFormat.SHORT, Locale.getDefault())
 
         lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.CREATED) {
                 connectivityObserver = NetworkActivityObserver(applicationContext)
-            }
-        }
-
-        lifecycleScope.launch {
-            lifecycle.repeatOnLifecycle(Lifecycle.State.CREATED) {
-                // TODO must be done before any device filter of changes
-                LogUtils.d(TAG, "device builds = " + BuildImageUtils.getDeviceBuilds())
             }
         }
 
@@ -149,9 +140,7 @@ class MainActivity : ComponentActivity() {
                                         Column(modifier = Modifier.fillMaxWidth()) {
                                             if (changeDetail.value != null) {
                                                 val change = changeDetail.value!!
-                                                val date = localDateFormat.format(
-                                                    gerritDataFormat.parse(change.updated)
-                                                )
+                                                val date = localDateTimeFormat.format(change.updatedInMillis)
                                                 Text(
                                                     text = change.subject
                                                 )
@@ -209,10 +198,11 @@ class MainActivity : ComponentActivity() {
             val connected = isConnected.collectAsState()
             if (connected.value) {
                 LazyColumn(modifier = Modifier.padding(top = 10.dp)) {
-                    itemsIndexed(items = changesPager) { index, change ->
+                    items(items = changesPager) { change ->
                         val selected =
                             changeDetail.value != null && changeDetail.value!!.id == change!!.id
-                        ChangeItem(index, change!!, selected)
+                        val changeTime = change!!.updatedInMillis
+                        ChangeItem(change, changeTime, selected)
                     }
                     when {
                         changesPager.loadState.refresh is LoadState.Loading -> {
@@ -234,7 +224,11 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun ChangeItem(index: Int, change: Change, selected: Boolean) {
+    fun ChangeItem(
+        change: Change,
+        changeTime: Long,
+        selected: Boolean
+    ) {
         val coroutineScope = rememberCoroutineScope()
         Row(
             modifier = Modifier
@@ -251,15 +245,45 @@ class MainActivity : ComponentActivity() {
                     viewModel.loadChange(change)
                 })
                 .background(
-                    if (selected) MaterialTheme.colorScheme.secondaryContainer else {
+                    if (selected || change.id.isEmpty()) MaterialTheme.colorScheme.secondaryContainer else {
                         MaterialTheme.colorScheme.background
                     }
                 )
         ) {
-            val date = localDateFormat.format(gerritDataFormat.parse(change.updated))
+            val date = if (change.id.isEmpty()) localDateFormat.format(changeTime) else localDateTimeFormat.format(changeTime)
             Text(text = date, modifier = Modifier.width(140.dp), maxLines = 1)
             Text(
                 text = change.subject, modifier = Modifier
+                    .padding(start = 8.dp)
+                    .fillMaxWidth(), maxLines = 1
+            )
+        }
+    }
+
+    @Composable
+    fun BuildItem(build: BuildImage, selected: Boolean) {
+        val coroutineScope = rememberCoroutineScope()
+        Row(
+            modifier = Modifier
+                .clickable(onClick = {
+                    coroutineScope.launch {
+                        if (bottomSheetScaffoldState.bottomSheetState.isCollapsed) {
+                            bottomSheetScaffoldState.bottomSheetState.animateTo(
+                                BottomSheetValue.Expanded,
+                                tween(300)
+                            )
+                            bottomSheetExpanded = BottomSheetValue.Expanded
+                        }
+                    }
+                })
+                .background(
+                    MaterialTheme.colorScheme.secondaryContainer
+                )
+        ) {
+            val date = localDateFormat.format(build.getBuildDateInMillis())
+            Text(text = date, modifier = Modifier.width(140.dp), maxLines = 1)
+            Text(
+                text = build.filename, modifier = Modifier
                     .padding(start = 8.dp)
                     .fillMaxWidth(), maxLines = 1
             )
