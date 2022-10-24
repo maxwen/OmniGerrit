@@ -5,9 +5,11 @@ import java.util.*
 
 object ChangeFilter {
     var defaultBranch: String = ""
-    val gerritDataFormat by lazy {
+    val gerritDateTimeFormat by lazy {
         initDateFormat()
     }
+
+    val hideProjectList = listOf("android_device_", "android_hardware_", "android_kernel_")
 
     private fun initDateFormat(): SimpleDateFormat {
         val format = SimpleDateFormat("yyyy-MM-dd HH:mm")
@@ -40,4 +42,13 @@ object ChangeFilter {
         return q.joinToString(separator = "+")
     }
 
+
+    /*if (c.project.startsWith("android_device_")) hidden = true
+    if (c.project.startsWith("android_hardware_")) hidden = true
+    if (c.project.startsWith("android_kernel_")) hidden = true
+    if (mUseProjectsList.contains(c.project)) hidden = false*/
+
+    fun showProject(project: String): Boolean {
+        return hideProjectList.none() { project.startsWith(it) }
+    }
 }

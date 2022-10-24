@@ -1,55 +1,58 @@
 package org.omnirom.omnigerrit.model
 
-import androidx.lifecycle.*
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
 import org.omnirom.omnigerrit.retrofit.GerritApi
 import org.omnirom.omnigerrit.utils.BuildImageUtils
 import org.omnirom.omnigerrit.utils.LogUtils
+import org.omnirom.omnigerrit.utils.NetworkUtils
+import org.omnirom.omniota.model.ConnectivityObserver
 import org.omnirom.omniota.model.RetrofitManager
 
 class MainViewModel() : ViewModel() {
     val TAG = "MainViewModel"
 
-    var changesPager: Flow<PagingData<Change>>? = null
+    var changesPager = getChangesPaging()
 
     val gerritApi: GerritApi = RetrofitManager.getGerritInstance().create(GerritApi::class.java)
 
     private val _change = MutableStateFlow<Change?>(null)
     val changeFlow = _change.asStateFlow()
 
+    val reloadFlow = MutableSharedFlow<Boolean>()
+
     val buildsTimestampList = mutableListOf<Long>()
     var buildsMap = mapOf<Long, BuildImage>()
 
-    init {
-        initDeviceBuilds()
-        initChangesPaging()
+    private val initialIsConnected by lazy {
+        NetworkUtils.connectivityObserver.peekStatus()
     }
+    private var _isConnected =
+        MutableStateFlow(initialIsConnected == ConnectivityObserver.Status.Available)
+    val isConnected = _isConnected.asStateFlow()
 
-    /*fun loadChanges() {
+    init {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                val changes = gerritApi.getChanges(
-                    params = ChangeFilter.createQueryString(), limit = "10", offset = "0"
-                )
-                if (changes.isSuccessful && changes.body() != null) {
-                    val changes = changes.body()!!
+            NetworkUtils.connectivityObserver.observe().collectLatest { status ->
+                val connected = status == ConnectivityObserver.Status.Available
+                if (initialIsConnected != ConnectivityObserver.Status.Available && connected) {
+                    reload()
                 }
+                _isConnected.value = connected
             }
         }
-    }*/
+        initDeviceBuilds()
+    }
 
-    private fun initChangesPaging() {
-        changesPager = Pager(
+    private fun getChangesPaging(): Flow<PagingData<Change>> {
+        return Pager(
             config = PagingConfig(
                 pageSize = ChangesPagingSource.PAGE_SIZE,
                 enablePlaceholders = false,
@@ -59,29 +62,45 @@ class MainViewModel() : ViewModel() {
         ).flow.cachedIn(viewModelScope)
     }
 
+    fun reload() {
+        LogUtils.d(TAG, "reload")
+        initDeviceBuilds()
+        _change.value = null
+        viewModelScope.launch {
+            reloadFlow.emit(true)
+        }
+    }
+
     fun loadChange(change: Change) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                val change = gerritApi.getChange(id = change.id)
-                if (change.isSuccessful && change.body() != null) {
-                    _change.value = change.body()!!
+            val changes = gerritApi.getChanges(params = change.id, options = listOf("CURRENT_REVISION"))
+            if (changes.isSuccessful && changes.body() != null) {
+                val changeList = changes.body()!!
+                if (changeList.size == 1) {
+                    val change = changeList.first()
+                    val commit = gerritApi.getCommit(change.id, change.current_revision)
+                    if (commit.isSuccessful && commit.body() != null) {
+                        val commit = commit.body()
+                        change.commit = commit
+                    }
+                    _change.value = change
                     LogUtils.d(TAG, "change = " + changeFlow.value)
                 }
             }
         }
     }
 
+
     private fun initDeviceBuilds() {
         viewModelScope.launch {
             runBlocking {
-                withContext(Dispatchers.IO) {
-                    buildsMap =
-                        BuildImageUtils.getDeviceBuildsMap(BuildImageUtils.getDeviceBuilds())
-                    LogUtils.d(TAG, "buildsMap = " + buildsMap)
+                buildsTimestampList.clear()
+                buildsMap =
+                    BuildImageUtils.getDeviceBuildsMap(BuildImageUtils.getDeviceBuilds())
+                LogUtils.d(TAG, "buildsMap = " + buildsMap)
 
-                    buildsTimestampList.addAll(buildsMap.keys.sorted().reversed())
-                    LogUtils.d(TAG, "builds = " + buildsTimestampList)
-                }
+                buildsTimestampList.addAll(buildsMap.keys.sorted().reversed())
+                LogUtils.d(TAG, "builds = " + buildsTimestampList)
             }
         }
     }

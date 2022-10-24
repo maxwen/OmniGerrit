@@ -18,6 +18,7 @@
 package org.omnirom.omnigerrit.retrofit
 
 import org.omnirom.omnigerrit.model.Change
+import org.omnirom.omnigerrit.model.CommitInfo
 import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Path
@@ -37,4 +38,10 @@ interface GerritApi {
     suspend fun getChange(
         @Path("id") id: String,
     ): Response<Change>
+
+    @GET("changes/{id}/revisions/{revision}/commit")
+    suspend fun getCommit(
+        @Path("id") id: String,
+        @Path("revision") revision: String
+    ): Response<CommitInfo>
 }

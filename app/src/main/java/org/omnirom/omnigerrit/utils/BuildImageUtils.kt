@@ -22,17 +22,18 @@ import org.omnirom.omnigerrit.model.BuildImage
 import org.omnirom.omnigerrit.model.Version
 import org.omnirom.omnigerrit.retrofit.OmniOtaApi
 import org.omnirom.omniota.model.RetrofitManager
-import java.text.SimpleDateFormat
 
 
 object BuildImageUtils {
     private val TAG = "BuildImageUtils"
 
     var device: String = ""
-    var buildType: String= ""
+    var buildType: String = ""
     var version: Version = Version("0")
 
     suspend fun getDeviceBuilds(): List<BuildImage> {
+        LogUtils.d(TAG, "getDeviceBuilds")
+
         val omniOtaApi =
             RetrofitManager.getOtaInstance().create(OmniOtaApi::class.java)
         try {
@@ -52,13 +53,15 @@ object BuildImageUtils {
         return listOf()
     }
 
-    fun getDeviceBuildsMap(builds: List<BuildImage>) : Map<Long, BuildImage> {
+    fun getDeviceBuildsMap(builds: List<BuildImage>): Map<Long, BuildImage> {
         val buildsMap = mutableMapOf<Long, BuildImage>()
-        builds.forEach { build ->  buildsMap.put(build.getBuildDateInMillis(), build)}
+        builds.forEach { build -> buildsMap.put(build.getBuildDateInMillis(), build) }
         return buildsMap
     }
 
     private suspend fun scanDeviceBuilds(rootDir: String): Boolean {
+        LogUtils.d(TAG, "scanDeviceBuilds rootDir = " + rootDir)
+
         val omniOtaApi =
             RetrofitManager.getOtaInstance(rootDir).create(OmniOtaApi::class.java)
         try {
@@ -87,6 +90,7 @@ object BuildImageUtils {
 
     fun findDeviceRootDir() {
         runBlocking {
+            LogUtils.d(TAG, "findDeviceRootDir")
             var buildImageFound = scanDeviceBuilds("")
             if (!buildImageFound) {
                 buildImageFound = scanDeviceBuilds("tmp")
@@ -94,8 +98,9 @@ object BuildImageUtils {
                     RetrofitManager.deviceRootDir = "tmp"
                     return@runBlocking
                 }
+            } else {
+                RetrofitManager.deviceRootDir = ""
             }
-            RetrofitManager.deviceRootDir = ""
         }
     }
 }

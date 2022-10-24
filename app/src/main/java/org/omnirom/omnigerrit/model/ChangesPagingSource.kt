@@ -16,10 +16,9 @@
 
 package org.omnirom.omnigerrit.model
 
+import androidx.lifecycle.ViewModel
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import org.omnirom.omnigerrit.utils.LogUtils
 
 class ChangesPagingSource(private val viewModel: MainViewModel) :
@@ -29,29 +28,34 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
 
     companion object {
         val STARTING_KEY = 0
-        val GERRIT_QUERY_LIMIT = 20
-        val PAGE_SIZE = 20
+        val GERRIT_QUERY_LIMIT = 30
+        val PAGE_SIZE = 30
     }
 
     override suspend fun load(params: LoadParams<Int>): LoadResult<Int, Change> {
         return try {
-            withContext(Dispatchers.IO) {
-                // If params.key is null, it is the first load, so we start loading with STARTING_KEY
-                val startKey = params.key ?: STARTING_KEY
-                val pageIndex = startKey
+            // If params.key is null, it is the first load, so we start loading with STARTING_KEY
+            val startKey = params.key ?: STARTING_KEY
+            val pageIndex = startKey
 
-                val queryResultList = fillResultList()
-
-                val newCount = queryResultList.size
-                val prevKey = if (pageIndex == 0) null else pageIndex - 1
-                val nextKey = if (queryResultList.isEmpty()) null else pageIndex + 1
-
-                LoadResult.Page(
-                    data = queryResultList,
-                    prevKey = prevKey,
-                    nextKey = nextKey,
-                )
+            val queryResultList = mutableListOf<Change>()
+            if (viewModel.isConnected.value) {
+                fillResultList(queryResultList)
             }
+
+            val newCount = queryResultList.size
+            val prevKey = if (pageIndex == 0) null else pageIndex - 1
+            val nextKey = if (queryResultList.isEmpty()) null else pageIndex + 1
+
+            LogUtils.d(
+                TAG,
+                "queryResultList = " + pageIndex + " " + startKey
+            )
+            LoadResult.Page(
+                data = queryResultList,
+                prevKey = prevKey,
+                nextKey = nextKey,
+            )
         } catch (e: Exception) {
             LogUtils.e(TAG, "load " + e.message, e)
 
@@ -60,15 +64,11 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
     }
 
     override fun getRefreshKey(state: PagingState<Int, Change>): Int? {
-        return state.anchorPosition?.let { anchorPosition ->
-            val anchorPage = state.closestPageToPosition(anchorPosition)
-            anchorPage?.prevKey?.plus(1) ?: anchorPage?.nextKey?.minus(1)
-        }
+        // always use null!!!
+        return null
     }
 
-    private suspend fun fillResultList(): List<Change> {
-        val queryResultList = mutableListOf<Change>()
-
+    private suspend fun fillResultList(queryResultList: MutableList<Change>) {
         while (queryResultList.size < PAGE_SIZE) {
             val changes = viewModel.gerritApi.getChanges(
                 ChangeFilter.createQueryString(),
@@ -80,8 +80,8 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
                 if (changeList.isEmpty()) {
                     break
                 } else {
-                    //queryResultList.addAll(changeList.filter { it.project.startsWith("android_frameworks_base") })
-                    queryResultList.addAll(changeList)
+                    queryResultList.addAll(changeList.filter { ChangeFilter.showProject(it.project) })
+                    //queryResultList.addAll(changeList)
                     offset += GERRIT_QUERY_LIMIT
                 }
             }
@@ -123,6 +123,5 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
             }
             viewModel.buildsTimestampList.removeAll(addedBuilds)
         }
-        return queryResultList
     }
 }

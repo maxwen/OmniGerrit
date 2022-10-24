@@ -21,14 +21,16 @@ data class Change(
     val status: String = "",
     val created: String = "",
     val updated: String = "",
-    val _number: String = ""
+    val _number: String = "",
+    val current_revision: String = "",
+    var commit: CommitInfo? = null
 ) {
     constructor(buildImage: BuildImage) : this(
         subject = buildImage.filename,
-        updated = ChangeFilter.gerritDataFormat.format(buildImage.getBuildDateInMillis())
+        updated = ChangeFilter.gerritDateTimeFormat.format(buildImage.getBuildDateInMillis())
     )
 
     val updatedInMillis by lazy {
-        ChangeFilter.gerritDataFormat.parse(updated).time
+        ChangeFilter.gerritDateTimeFormat.parse(updated).time
     }
 }

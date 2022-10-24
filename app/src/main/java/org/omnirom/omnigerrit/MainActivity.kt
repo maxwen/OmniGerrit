@@ -12,20 +12,24 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material3.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FabPosition
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,16 +46,12 @@ import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.items
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.omnirom.omnigerrit.model.BuildImage
 import org.omnirom.omnigerrit.model.Change
-import org.omnirom.omnigerrit.model.ChangeFilter
 import org.omnirom.omnigerrit.model.MainViewModel
 import org.omnirom.omnigerrit.ui.theme.OmniGerritTheme
-import org.omnirom.omniota.model.ConnectivityObserver
-import org.omnirom.omniota.model.NetworkActivityObserver
 import org.omnirom.omniota.model.RetrofitManager
 import java.text.DateFormat
 import java.util.*
@@ -60,9 +60,10 @@ import java.util.*
 class MainActivity : ComponentActivity() {
     val TAG = "MainActivity"
     private val viewModel by viewModels<MainViewModel>()
-    var changesPager: LazyPagingItems<Change>? = null
-    lateinit var connectivityObserver: ConnectivityObserver
-    private val isConnected = MutableStateFlow<Boolean>(false)
+    private lateinit var changesPager: LazyPagingItems<Change>
+    private lateinit var listState: LazyListState
+    private lateinit var changeDetail: State<Change?>
+
     var bottomSheetExpanded = BottomSheetValue.Collapsed
     lateinit var bottomSheetScaffoldState: BottomSheetScaffoldState
     lateinit var localDateTimeFormat: DateFormat
@@ -79,15 +80,11 @@ class MainActivity : ComponentActivity() {
             DateFormat.getDateInstance(DateFormat.SHORT, Locale.getDefault())
 
         lifecycleScope.launch {
-            lifecycle.repeatOnLifecycle(Lifecycle.State.CREATED) {
-                connectivityObserver = NetworkActivityObserver(applicationContext)
-            }
-        }
-
-        lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                connectivityObserver.observe().collectLatest { status ->
-                    isConnected.value = status == ConnectivityObserver.Status.Available
+                viewModel.reloadFlow.collectLatest {
+                    if (viewModel.isConnected.value) {
+                        changesPager.refresh()
+                    }
                 }
             }
         }
@@ -97,7 +94,10 @@ class MainActivity : ComponentActivity() {
                 bottomSheetScaffoldState = rememberBottomSheetScaffoldState(
                     bottomSheetState = BottomSheetState(initialValue = bottomSheetExpanded)
                 )
-                val changeDetail = viewModel.changeFlow.collectAsState()
+                changeDetail = viewModel.changeFlow.collectAsState()
+                changesPager = viewModel.changesPager.collectAsLazyPagingItems()
+                listState = rememberLazyListState()
+
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -120,7 +120,19 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                             })
-                        })
+                        }, floatingActionButton = {
+                            FloatingActionButton(onClick = {
+                                if (viewModel.isConnected.value) {
+                                    viewModel.reload()
+                                }
+                            }) {
+                                Icon(
+                                    Icons.Outlined.Refresh,
+                                    contentDescription = null,
+                                )
+                            }
+                        }, floatingActionButtonPosition = FabPosition.End
+                    )
                     {
                         Column(modifier = Modifier.padding(it)) {
                             BottomSheetScaffold(
@@ -140,12 +152,10 @@ class MainActivity : ComponentActivity() {
                                         Column(modifier = Modifier.fillMaxWidth()) {
                                             if (changeDetail.value != null) {
                                                 val change = changeDetail.value!!
-                                                val date = localDateTimeFormat.format(change.updatedInMillis)
+                                                val date =
+                                                    localDateTimeFormat.format(change.updatedInMillis)
                                                 Text(
-                                                    text = change.subject
-                                                )
-                                                Text(
-                                                    text = "Change-Id:" + change.change_id
+                                                    text = change.commit?.trimmedMessage() ?: change.subject
                                                 )
                                                 Text(
                                                     text = "Project:" + change.project
@@ -179,9 +189,7 @@ class MainActivity : ComponentActivity() {
                             {
                                 BoxWithConstraints {
                                     Column() {
-                                        changesPager =
-                                            viewModel.changesPager!!.collectAsLazyPagingItems()
-                                        Changes(changesPager!!, changeDetail)
+                                        Changes()
                                     }
                                 }
                             }
@@ -193,11 +201,11 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun Changes(changesPager: LazyPagingItems<Change>, changeDetail: State<Change?>) {
+    fun Changes() {
         Column(modifier = Modifier.padding(start = 10.dp, end = 10.dp)) {
-            val connected = isConnected.collectAsState()
+            val connected = viewModel.isConnected.collectAsState()
             if (connected.value) {
-                LazyColumn(modifier = Modifier.padding(top = 10.dp)) {
+                LazyColumn(modifier = Modifier.padding(top = 10.dp),state = listState) {
                     items(items = changesPager) { change ->
                         val selected =
                             changeDetail.value != null && changeDetail.value!!.id == change!!.id
@@ -230,6 +238,13 @@ class MainActivity : ComponentActivity() {
         selected: Boolean
     ) {
         val coroutineScope = rememberCoroutineScope()
+        var bgColor = MaterialTheme.colorScheme.background
+        if (selected) {
+            bgColor = MaterialTheme.colorScheme.secondaryContainer
+        } else if (change.id.isEmpty()) {
+            bgColor = MaterialTheme.colorScheme.tertiaryContainer
+        }
+
         Row(
             modifier = Modifier
                 .clickable(onClick = {
@@ -244,13 +259,12 @@ class MainActivity : ComponentActivity() {
                     }
                     viewModel.loadChange(change)
                 })
-                .background(
-                    if (selected || change.id.isEmpty()) MaterialTheme.colorScheme.secondaryContainer else {
-                        MaterialTheme.colorScheme.background
-                    }
-                )
+                .background(bgColor)
         ) {
-            val date = if (change.id.isEmpty()) localDateFormat.format(changeTime) else localDateTimeFormat.format(changeTime)
+            val date =
+                if (change.id.isEmpty()) localDateFormat.format(changeTime) else localDateTimeFormat.format(
+                    changeTime
+                )
             Text(text = date, modifier = Modifier.width(140.dp), maxLines = 1)
             Text(
                 text = change.subject, modifier = Modifier

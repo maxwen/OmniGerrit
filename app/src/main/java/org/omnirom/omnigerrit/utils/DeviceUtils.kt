@@ -37,7 +37,7 @@ object DeviceUtils {
                     String::class.java, String::class.java
                 )
             )
-            return get.invoke(null, key, "") as String
+            return get.invoke(null, key, default) as String
         } catch (e: java.lang.Exception) {
             LogUtils.e(TAG, "getProperty", e)
         }
