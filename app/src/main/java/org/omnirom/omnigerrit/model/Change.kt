@@ -12,6 +12,9 @@ import androidx.annotation.Keep
 "updated": "2012-07-17 07:19:27.766000000",*/
 
 @Keep
+data class Owner(val name: String, val _account_id: Int)
+
+@Keep
 data class Change(
     val id: String = "",
     val project: String = "",
@@ -23,7 +26,8 @@ data class Change(
     val updated: String = "",
     val _number: String = "",
     val current_revision: String = "",
-    var commit: CommitInfo? = null
+    var commit: CommitInfo? = null,
+    val owner: Owner = Owner("John Doe", 4211)
 ) {
     constructor(buildImage: BuildImage) : this(
         subject = buildImage.filename,

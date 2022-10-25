@@ -9,7 +9,7 @@ object ChangeFilter {
         initDateFormat()
     }
 
-    val hideProjectList = listOf("android_device_", "android_hardware_", "android_kernel_")
+    private val hideProjectList = listOf("android_device_", "android_hardware_", "android_kernel_")
 
     private fun initDateFormat(): SimpleDateFormat {
         val format = SimpleDateFormat("yyyy-MM-dd HH:mm")
@@ -24,7 +24,8 @@ object ChangeFilter {
     fun createQueryString(
         branch: String = "",
         project: String = "",
-        status: Status = Status.Merged
+        status: Status = Status.Merged,
+        message: String = ""
     ): String {
         val q = mutableListOf<String>()
         if (branch.isNotEmpty()) {
@@ -34,6 +35,9 @@ object ChangeFilter {
         }
         if (project.isNotEmpty()) {
             q.add("project:$project")
+        }
+        if (message.isNotEmpty()) {
+            q.add("message:$message")
         }
         when (status) {
             Status.Merged -> q.add("status:merged")

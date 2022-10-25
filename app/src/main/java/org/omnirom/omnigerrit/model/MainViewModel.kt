@@ -28,7 +28,6 @@ class MainViewModel() : ViewModel() {
 
     val reloadFlow = MutableSharedFlow<Boolean>()
 
-    val buildsTimestampList = mutableListOf<Long>()
     var buildsMap = mapOf<Long, BuildImage>()
 
     private val initialIsConnected by lazy {
@@ -37,6 +36,9 @@ class MainViewModel() : ViewModel() {
     private var _isConnected =
         MutableStateFlow(initialIsConnected == ConnectivityObserver.Status.Available)
     val isConnected = _isConnected.asStateFlow()
+
+    private val _queryString = MutableStateFlow<String>("")
+    val queryString = _queryString.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -77,16 +79,18 @@ class MainViewModel() : ViewModel() {
             if (changes.isSuccessful && changes.body() != null) {
                 val changeList = changes.body()!!
                 if (changeList.size == 1) {
-                    val change = changeList.first()
-                    val commit = gerritApi.getCommit(change.id, change.current_revision)
+                    val changeDetail = changeList.first()
+                    val commit = gerritApi.getCommit(changeDetail.id, changeDetail.current_revision)
                     if (commit.isSuccessful && commit.body() != null) {
                         val commit = commit.body()
-                        change.commit = commit
+                        changeDetail.commit = commit
                     }
-                    _change.value = change
-                    LogUtils.d(TAG, "change = " + changeFlow.value)
+                    _change.value = changeDetail
+                    LogUtils.d(TAG, "changeDetail = " + changeFlow.value)
+                    return@launch
                 }
             }
+            _change.value = null
         }
     }
 
@@ -94,14 +98,14 @@ class MainViewModel() : ViewModel() {
     private fun initDeviceBuilds() {
         viewModelScope.launch {
             runBlocking {
-                buildsTimestampList.clear()
                 buildsMap =
                     BuildImageUtils.getDeviceBuildsMap(BuildImageUtils.getDeviceBuilds())
                 LogUtils.d(TAG, "buildsMap = " + buildsMap)
-
-                buildsTimestampList.addAll(buildsMap.keys.sorted().reversed())
-                LogUtils.d(TAG, "builds = " + buildsTimestampList)
             }
         }
+    }
+
+    fun setQueryString(q : String) {
+        _queryString.value = q
     }
 }

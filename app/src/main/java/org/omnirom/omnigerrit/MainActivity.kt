@@ -8,8 +8,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -17,18 +17,20 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,6 +39,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -45,10 +48,9 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
-import androidx.paging.compose.items
+import androidx.paging.compose.itemsIndexed
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import org.omnirom.omnigerrit.model.BuildImage
 import org.omnirom.omnigerrit.model.Change
 import org.omnirom.omnigerrit.model.MainViewModel
 import org.omnirom.omnigerrit.ui.theme.OmniGerritTheme
@@ -68,13 +70,15 @@ class MainActivity : ComponentActivity() {
     lateinit var bottomSheetScaffoldState: BottomSheetScaffoldState
     lateinit var localDateTimeFormat: DateFormat
     lateinit var localDateFormat: DateFormat
+    private var queryListenerStarted = false
+    private var messageExpanded = mutableStateOf(false)
 
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         localDateTimeFormat =
-            DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT, Locale.getDefault())
+            DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, Locale.getDefault())
         localDateTimeFormat.timeZone = TimeZone.getDefault()
         localDateFormat =
             DateFormat.getDateInstance(DateFormat.SHORT, Locale.getDefault())
@@ -96,6 +100,12 @@ class MainActivity : ComponentActivity() {
                 )
                 changeDetail = viewModel.changeFlow.collectAsState()
                 changesPager = viewModel.changesPager.collectAsLazyPagingItems()
+
+                if (!queryListenerStarted) {
+                    startQueryListener()
+                    queryListenerStarted = true
+                }
+
                 listState = rememberLazyListState()
 
                 Surface(
@@ -108,7 +118,10 @@ class MainActivity : ComponentActivity() {
                                 Text(
                                     text = stringResource(id = R.string.app_name)
                                 )
-                            }, actions = {
+                            })
+                        },
+                        bottomBar = {
+                            BottomAppBar(actions = {
                                 IconButton(
                                     onClick = {
                                         // TODO
@@ -119,19 +132,19 @@ class MainActivity : ComponentActivity() {
                                         contentDescription = "",
                                     )
                                 }
-                            })
-                        }, floatingActionButton = {
-                            FloatingActionButton(onClick = {
-                                if (viewModel.isConnected.value) {
-                                    viewModel.reload()
+                            }, floatingActionButton = {
+                                FloatingActionButton(onClick = {
+                                    if (viewModel.isConnected.value) {
+                                        viewModel.reload()
+                                    }
+                                }) {
+                                    Icon(
+                                        Icons.Outlined.Refresh,
+                                        contentDescription = null,
+                                    )
                                 }
-                            }) {
-                                Icon(
-                                    Icons.Outlined.Refresh,
-                                    contentDescription = null,
-                                )
-                            }
-                        }, floatingActionButtonPosition = FabPosition.End
+                            })
+                        }
                     )
                     {
                         Column(modifier = Modifier.padding(it)) {
@@ -139,50 +152,11 @@ class MainActivity : ComponentActivity() {
                                 scaffoldState = bottomSheetScaffoldState,
                                 sheetPeekHeight = 0.dp,
                                 sheetContent = {
-                                    Column(
-                                        modifier = Modifier
-                                            .heightIn(min = 200.dp)
-                                            .background(
-                                                color = MaterialTheme.colorScheme.surfaceColorAtElevation(
-                                                    3.dp
-                                                )
-                                            )
-                                            .padding(top = 12.dp, start = 10.dp, end = 10.dp)
-                                    ) {
-                                        Column(modifier = Modifier.fillMaxWidth()) {
-                                            if (changeDetail.value != null) {
-                                                val change = changeDetail.value!!
-                                                val date =
-                                                    localDateTimeFormat.format(change.updatedInMillis)
-                                                Text(
-                                                    text = change.commit?.trimmedMessage() ?: change.subject
-                                                )
-                                                Text(
-                                                    text = "Project:" + change.project
-                                                )
-                                                Text(
-                                                    text = "Branch:" + change.branch
-                                                )
-                                                Text(
-                                                    text = "Modified:" + date
-                                                )
-
-                                                Button(onClick = {
-                                                    val uri = Uri.parse(
-                                                        RetrofitManager.gerritBaseUrl + "#/c/" + changeDetail.value!!._number
-                                                    )
-                                                    val intent = Intent(Intent.ACTION_VIEW, uri)
-                                                    startActivity(intent)
-                                                }) {
-                                                    Text(text = "Show")
-                                                }
-                                            }
-                                        }
-                                    }
+                                    ChangeDetails()
                                 },
                                 sheetShape = RoundedCornerShape(
-                                    topEnd = 12.dp,
-                                    topStart = 12.dp
+                                    topEnd = 28.dp,
+                                    topStart = 28.dp
                                 ),
                                 backgroundColor = MaterialTheme.colorScheme.background,
                             )
@@ -202,15 +176,46 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun Changes() {
-        Column(modifier = Modifier.padding(start = 10.dp, end = 10.dp)) {
+        val queryString = viewModel.queryString.collectAsState()
+
+        Column(modifier = Modifier.padding(start = 14.dp, end = 14.dp)) {
+            Row(modifier = Modifier.padding(4.dp)) {
+                OutlinedTextField(
+                    value = queryString.value,
+                    onValueChange = {
+                        viewModel.setQueryString(it)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth(),
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                    leadingIcon = {
+                        Icon(
+                            Icons.Outlined.Search,
+                            contentDescription = null
+                        )
+                    },
+                    placeholder = {
+                        Text(
+                            text = "Enter word to match",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    },
+                    maxLines = 1,
+                    colors = TextFieldDefaults.textFieldColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
+                    ),
+                    shape = RoundedCornerShape(20.dp)
+                )
+            }
             val connected = viewModel.isConnected.collectAsState()
             if (connected.value) {
-                LazyColumn(modifier = Modifier.padding(top = 10.dp),state = listState) {
-                    items(items = changesPager) { change ->
+                LazyColumn(modifier = Modifier.padding(top = 10.dp), state = listState) {
+                    itemsIndexed(items = changesPager) { index, change ->
                         val selected =
                             changeDetail.value != null && changeDetail.value!!.id == change!!.id
                         val changeTime = change!!.updatedInMillis
-                        ChangeItem(change, changeTime, selected)
+                        ChangeItem(index, change, changeTime, selected)
                     }
                     when {
                         changesPager.loadState.refresh is LoadState.Loading -> {
@@ -233,6 +238,7 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun ChangeItem(
+        index: Int,
         change: Change,
         changeTime: Long,
         selected: Boolean
@@ -245,40 +251,11 @@ class MainActivity : ComponentActivity() {
             bgColor = MaterialTheme.colorScheme.tertiaryContainer
         }
 
+        val date = localDateTimeFormat.format(changeTime)
         Row(
             modifier = Modifier
-                .clickable(onClick = {
-                    coroutineScope.launch {
-                        if (bottomSheetScaffoldState.bottomSheetState.isCollapsed) {
-                            bottomSheetScaffoldState.bottomSheetState.animateTo(
-                                BottomSheetValue.Expanded,
-                                tween(300)
-                            )
-                            bottomSheetExpanded = BottomSheetValue.Expanded
-                        }
-                    }
-                    viewModel.loadChange(change)
-                })
                 .background(bgColor)
-        ) {
-            val date =
-                if (change.id.isEmpty()) localDateFormat.format(changeTime) else localDateTimeFormat.format(
-                    changeTime
-                )
-            Text(text = date, modifier = Modifier.width(140.dp), maxLines = 1)
-            Text(
-                text = change.subject, modifier = Modifier
-                    .padding(start = 8.dp)
-                    .fillMaxWidth(), maxLines = 1
-            )
-        }
-    }
-
-    @Composable
-    fun BuildItem(build: BuildImage, selected: Boolean) {
-        val coroutineScope = rememberCoroutineScope()
-        Row(
-            modifier = Modifier
+                .padding(top = 4.dp, bottom = 4.dp)
                 .clickable(onClick = {
                     coroutineScope.launch {
                         if (bottomSheetScaffoldState.bottomSheetState.isCollapsed) {
@@ -287,20 +264,30 @@ class MainActivity : ComponentActivity() {
                                 tween(300)
                             )
                             bottomSheetExpanded = BottomSheetValue.Expanded
+                            // TODO
+                            listState.animateScrollToItem(index)
                         }
                     }
-                })
-                .background(
-                    MaterialTheme.colorScheme.secondaryContainer
-                )
+                    messageExpanded.value = false
+                    viewModel.loadChange(change)
+                }),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            val date = localDateFormat.format(build.getBuildDateInMillis())
-            Text(text = date, modifier = Modifier.width(140.dp), maxLines = 1)
-            Text(
-                text = build.filename, modifier = Modifier
-                    .padding(start = 8.dp)
-                    .fillMaxWidth(), maxLines = 1
-            )
+            Column() {
+                Text(
+                    text = change.subject,
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = date + " " + change.owner.name,
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 1,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
         }
     }
 
@@ -336,28 +323,149 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    @Composable
-    fun SnackbarDemo() {
-        Column {
-            val (snackbarVisibleState, setSnackBarState) = remember { mutableStateOf(false) }
-
-            Button(onClick = { setSnackBarState(!snackbarVisibleState) }) {
-                if (snackbarVisibleState) {
-                    Text("Hide Snackbar")
-                } else {
-                    Text("Show Snackbar")
+    private fun startQueryListener() {
+        lifecycleScope.launch {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.queryString.collectLatest {
+                    if (viewModel.isConnected.value) {
+                        changesPager.refresh()
+                    }
                 }
             }
-            if (snackbarVisibleState) {
-                Snackbar(
+        }
+    }
 
-                    action = {
-                        Button(onClick = {}) {
-                            Text("MyAction")
+    @OptIn(ExperimentalMaterialApi::class)
+    val BottomSheetScaffoldState.currentFraction: Float
+        get() {
+            val fraction = bottomSheetState.progress.fraction
+            val targetValue = bottomSheetState.targetValue
+            val currentValue = bottomSheetState.currentValue
+
+            return when {
+                currentValue == BottomSheetValue.Collapsed && targetValue == BottomSheetValue.Collapsed -> 0f
+                currentValue == BottomSheetValue.Expanded && targetValue == BottomSheetValue.Expanded -> 1f
+                currentValue == BottomSheetValue.Collapsed && targetValue == BottomSheetValue.Expanded -> fraction
+                else -> 1f - fraction
+            }
+        }
+
+    @OptIn(ExperimentalFoundationApi::class)
+    @Composable
+    fun ChangeDetails() {
+        Column(
+            modifier = Modifier
+                .height(height = 200.dp)
+                .background(
+                    color = MaterialTheme.colorScheme.surfaceColorAtElevation(
+                        3.dp
+                    )
+                )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 20.dp)
+            ) {
+                //val coroutineScope = rememberCoroutineScope()
+
+                /*Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 14.dp, end = 14.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    IconButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                if (bottomSheetScaffoldState.bottomSheetState.isExpanded) {
+                                    bottomSheetScaffoldState.bottomSheetState.animateTo(
+                                        BottomSheetValue.Collapsed,
+                                        tween(300)
+                                    )
+                                    bottomSheetExpanded =
+                                        BottomSheetValue.Collapsed
+                                }
+                            }
+                        }) {
+                        Icon(
+                            Icons.Outlined.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                }*/
+
+                if (changeDetail.value != null) {
+                    val change = changeDetail.value!!
+                    val message = change.commit?.trimmedMessage() ?: change.subject
+                    val messageLines = message.split("\n").size
+                    val firstMessageLine = message.split("\n").first()
+                    var expanded by remember { messageExpanded }
+                    var scrollState = rememberScrollState()
+
+                    Row(
+                        modifier = Modifier
+                            .weight(1f, true)
+                            .padding(start = 14.dp, end = 14.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f, true)
+                                .clipScrollableContainer(orientation = Orientation.Vertical)
+                                .verticalScroll(state = scrollState),
+                        ) {
+                            Text(
+                                text = if (expanded) message else firstMessageLine,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
                         }
-                    },
-                    modifier = Modifier.padding(8.dp)
-                ) { Text(text = "This is a snackbar!") }
+                        if (messageLines > 2) {
+                            IconButton(
+                                onClick = {
+                                    messageExpanded.value = !messageExpanded.value
+                                }) {
+                                Icon(
+                                    if (expanded) Icons.Default.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onBackground
+                                )
+                            }
+                        }
+                    }
+                    if (!expanded) {
+                        Row(modifier = Modifier.padding(start = 14.dp, end = 14.dp)) {
+                            Text(
+                                text = "Project:" + change.project,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        /*Row(modifier = Modifier.padding(start = 14.dp, end = 14.dp)) {
+                            Text(
+                                text = "Branch:" + change.branch,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }*/
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 14.dp, end = 14.dp),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            Button(onClick = {
+                                val uri = Uri.parse(
+                                    RetrofitManager.gerritBaseUrl + "#/c/" + changeDetail.value!!._number
+                                )
+                                val intent = Intent(Intent.ACTION_VIEW, uri)
+                                startActivity(intent)
+                            }) {
+                                Text(text = "Show")
+                            }
+                        }
+                    }
+                }
             }
         }
     }

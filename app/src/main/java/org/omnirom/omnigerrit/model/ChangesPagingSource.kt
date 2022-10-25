@@ -25,6 +25,12 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
     PagingSource<Int, Change>() {
     val TAG = "ChangesPagingSource"
     private var offset: Int = 0
+    private val buildsTimestampList = mutableListOf<Long>()
+
+    init {
+        buildsTimestampList.addAll(viewModel.buildsMap.keys.sorted().reversed())
+    }
+
 
     companion object {
         val STARTING_KEY = 0
@@ -71,8 +77,9 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
     private suspend fun fillResultList(queryResultList: MutableList<Change>) {
         while (queryResultList.size < PAGE_SIZE) {
             val changes = viewModel.gerritApi.getChanges(
-                ChangeFilter.createQueryString(),
-                GERRIT_QUERY_LIMIT.toString(),
+                ChangeFilter.createQueryString(message = viewModel.queryString.value),
+                options = listOf("DETAILED_ACCOUNTS"),
+                limit = GERRIT_QUERY_LIMIT.toString(),
                 offset = offset.toString()
             )
             if (changes.isSuccessful && changes.body() != null) {
@@ -86,13 +93,13 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
                 }
             }
         }
-        if (queryResultList.isNotEmpty() && viewModel.buildsTimestampList.isNotEmpty()) {
+        if (queryResultList.isNotEmpty() && buildsTimestampList.isNotEmpty() && viewModel.queryString.value.isEmpty()) {
             val addedBuilds = mutableListOf<Long>()
             val queryResultListCopy = mutableListOf<Change>()
             queryResultListCopy.addAll(queryResultList)
             val firstChangeDate = queryResultListCopy.first().updatedInMillis
             val lastChangeDate = queryResultListCopy.last().updatedInMillis
-            viewModel.buildsTimestampList.filter { buildTime -> buildTime > firstChangeDate }
+            buildsTimestampList.filter { buildTime -> buildTime > firstChangeDate }
                 .forEach { buildTime ->
                     queryResultList.add(
                         addedBuilds.size,
@@ -100,7 +107,7 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
                     )
                     addedBuilds.add(buildTime)
                 }
-            viewModel.buildsTimestampList.removeAll(addedBuilds)
+            buildsTimestampList.removeAll(addedBuilds)
 
             queryResultListCopy.forEachIndexed() { index, change ->
                 val changeTime = change.updatedInMillis
@@ -112,7 +119,7 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
                 val nextChangeTime =
                     nextChange?.updatedInMillis ?: 0L
 
-                viewModel.buildsTimestampList.filter { buildTime -> buildTime > lastChangeDate && buildTime in (nextChangeTime + 1) until changeTime }
+                buildsTimestampList.filter { buildTime -> buildTime > lastChangeDate && buildTime in (nextChangeTime + 1) until changeTime }
                     .forEach { buildTime ->
                         queryResultList.add(
                             index + addedBuilds.size + 1,
@@ -121,7 +128,7 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
                         addedBuilds.add(buildTime)
                     }
             }
-            viewModel.buildsTimestampList.removeAll(addedBuilds)
+            buildsTimestampList.removeAll(addedBuilds)
         }
     }
 }
