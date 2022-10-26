@@ -2,6 +2,7 @@ package org.omnirom.omnigerrit
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -9,7 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
-import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -17,17 +18,16 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
@@ -35,6 +35,13 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -53,7 +60,9 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.omnirom.omnigerrit.model.Change
 import org.omnirom.omnigerrit.model.MainViewModel
+import org.omnirom.omnigerrit.model.Settings
 import org.omnirom.omnigerrit.ui.theme.OmniGerritTheme
+import org.omnirom.omnigerrit.ui.theme.isTablet
 import org.omnirom.omniota.model.RetrofitManager
 import java.text.DateFormat
 import java.util.*
@@ -63,7 +72,7 @@ class MainActivity : ComponentActivity() {
     val TAG = "MainActivity"
     private val viewModel by viewModels<MainViewModel>()
     private lateinit var changesPager: LazyPagingItems<Change>
-    private lateinit var listState: LazyListState
+    private lateinit var changesListState: LazyListState
     private lateinit var changeDetail: State<Change?>
 
     var bottomSheetExpanded = BottomSheetValue.Collapsed
@@ -71,7 +80,8 @@ class MainActivity : ComponentActivity() {
     lateinit var localDateTimeFormat: DateFormat
     lateinit var localDateFormat: DateFormat
     private var queryListenerStarted = false
-    private var messageExpanded = mutableStateOf(false)
+    private val snackbarHostState = SnackbarHostState()
+    private val changeDetailScrollState = ScrollState(0)
 
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -85,10 +95,20 @@ class MainActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.reloadFlow.collectLatest {
+                viewModel.triggerReload.collectLatest {
                     if (viewModel.isConnected.value) {
                         changesPager.refresh()
                     }
+                }
+            }
+        }
+
+        lifecycleScope.launch {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.snackbarShow.collect { message ->
+                    snackbarHostState.showSnackbar(
+                        message = message,
+                    )
                 }
             }
         }
@@ -98,7 +118,7 @@ class MainActivity : ComponentActivity() {
                 bottomSheetScaffoldState = rememberBottomSheetScaffoldState(
                     bottomSheetState = BottomSheetState(initialValue = bottomSheetExpanded)
                 )
-                changeDetail = viewModel.changeFlow.collectAsState()
+                changeDetail = viewModel.changeDetail.collectAsState()
                 changesPager = viewModel.changesPager.collectAsLazyPagingItems()
 
                 if (!queryListenerStarted) {
@@ -106,7 +126,8 @@ class MainActivity : ComponentActivity() {
                     queryListenerStarted = true
                 }
 
-                listState = rememberLazyListState()
+                changesListState = rememberLazyListState()
+                val projectFilter = viewModel.projectFilter.collectAsState()
 
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -118,17 +139,28 @@ class MainActivity : ComponentActivity() {
                                 Text(
                                     text = stringResource(id = R.string.app_name)
                                 )
+                            }, actions = {
+                                IconButton(
+                                    onClick = {
+                                        viewModel.showSnackbarMessage("Nothing to see here yet")
+                                    }
+                                ) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_settings),
+                                        contentDescription = "",
+                                    )
+                                }
                             })
                         },
                         bottomBar = {
                             BottomAppBar(actions = {
                                 IconButton(
                                     onClick = {
-                                        // TODO
+                                        viewModel.toggleProjectFilter()
                                     }
                                 ) {
                                     Icon(
-                                        painter = painterResource(id = R.drawable.ic_settings),
+                                        painter = painterResource(id = if (projectFilter.value) R.drawable.ic_filter_off else R.drawable.ic_filter),
                                         contentDescription = "",
                                     )
                                 }
@@ -144,7 +176,8 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                             })
-                        }
+                        },
+                        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
                     )
                     {
                         Column(modifier = Modifier.padding(it)) {
@@ -159,6 +192,7 @@ class MainActivity : ComponentActivity() {
                                     topStart = 28.dp
                                 ),
                                 backgroundColor = MaterialTheme.colorScheme.background,
+                                sheetGesturesEnabled = false
                             )
                             {
                                 BoxWithConstraints {
@@ -209,13 +243,13 @@ class MainActivity : ComponentActivity() {
                 )
             }
             val connected = viewModel.isConnected.collectAsState()
+            val buildsMapLoaded = viewModel.buildsMapLoaded.collectAsState()
+
             if (connected.value) {
-                LazyColumn(modifier = Modifier.padding(top = 10.dp), state = listState) {
+                LazyColumn(modifier = Modifier.padding(top = 10.dp), state = changesListState) {
                     itemsIndexed(items = changesPager) { index, change ->
-                        val selected =
-                            changeDetail.value != null && changeDetail.value!!.id == change!!.id
                         val changeTime = change!!.updatedInMillis
-                        ChangeItem(index, change, changeTime, selected)
+                        ChangeItem(index, change, changeTime)
                     }
                     when {
                         changesPager.loadState.refresh is LoadState.Loading -> {
@@ -228,21 +262,39 @@ class MainActivity : ComponentActivity() {
                         }
                         changesPager.loadState.append is LoadState.Error -> {
                         }
+                        !buildsMapLoaded.value -> {
+                            item { LoadingView(modifier = Modifier.fillParentMaxSize()) }
+                        }
                     }
                 }
             } else {
                 NoNetworkScreen()
+
+                // close bottom sheet
+                LaunchedEffect(key1 = connected, block = {
+                    if (!connected.value) {
+                        if (bottomSheetScaffoldState.bottomSheetState.isExpanded) {
+                            bottomSheetScaffoldState.bottomSheetState.animateTo(
+                                BottomSheetValue.Collapsed,
+                                tween(300)
+                            )
+                            bottomSheetExpanded = BottomSheetValue.Collapsed
+                        }
+                    }
+                })
             }
         }
     }
 
+    @OptIn(ExperimentalFoundationApi::class)
     @Composable
     fun ChangeItem(
         index: Int,
         change: Change,
-        changeTime: Long,
-        selected: Boolean
+        changeTime: Long
     ) {
+        val selected =
+            changeDetail.value != null && changeDetail.value!!.id == change.id
         val coroutineScope = rememberCoroutineScope()
         var bgColor = MaterialTheme.colorScheme.background
         if (selected) {
@@ -256,20 +308,34 @@ class MainActivity : ComponentActivity() {
             modifier = Modifier
                 .background(bgColor)
                 .padding(top = 4.dp, bottom = 4.dp)
-                .clickable(onClick = {
-                    coroutineScope.launch {
-                        if (bottomSheetScaffoldState.bottomSheetState.isCollapsed) {
-                            bottomSheetScaffoldState.bottomSheetState.animateTo(
-                                BottomSheetValue.Expanded,
-                                tween(300)
-                            )
-                            bottomSheetExpanded = BottomSheetValue.Expanded
-                            // TODO
-                            listState.animateScrollToItem(index)
+                .combinedClickable(onClick = {
+                    if (change.id.isNotEmpty()) {
+                        coroutineScope.launch {
+                            if (bottomSheetScaffoldState.bottomSheetState.isCollapsed) {
+                                bottomSheetScaffoldState.bottomSheetState.animateTo(
+                                    BottomSheetValue.Expanded,
+                                    tween(300)
+                                )
+                                bottomSheetExpanded = BottomSheetValue.Expanded
+                                // TODO
+                                changesListState.animateScrollToItem(index)
+                            }
+                            changeDetailScrollState.scrollTo(0)
+                        }
+                        viewModel.loadChange(change)
+
+                        coroutineScope.launch {
+                            if (!Settings.isDetailsHintShown()) {
+                                // TODO snackbar might not be the optimal way to do this
+                                viewModel.showSnackbarMessage("Click to show change in browser")
+                                Settings.setDetailsHintShown(true)
+                            }
                         }
                     }
-                    messageExpanded.value = false
-                    viewModel.loadChange(change)
+                }, onLongClick = {
+                    if (change._number.isNotEmpty()) {
+                        showChangeInGerrit(change._number)
+                    }
                 }),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -279,7 +345,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.titleSmall,
                 )
                 Text(
                     text = date + " " + change.owner.name,
@@ -287,6 +353,13 @@ class MainActivity : ComponentActivity() {
                     maxLines = 1,
                     style = MaterialTheme.typography.bodySmall
                 )
+                /*Text(
+                    text = change.project,
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodySmall
+                )*/
             }
         }
     }
@@ -353,120 +426,185 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalFoundationApi::class)
     @Composable
     fun ChangeDetails() {
+        /*val linerHeightInDp = with(LocalDensity.current) {
+            MaterialTheme.typography.bodyMedium.lineHeight.toDp()
+        }*/
+        val coroutineScope = rememberCoroutineScope()
+
+        val nestedScrollConnection = remember {
+            object : NestedScrollConnection {
+                override fun onPostScroll(
+                    consumed: Offset,
+                    available: Offset,
+                    source: NestedScrollSource
+                ): Offset {
+                    return available
+                }
+            }
+        }
+
         Column(
             modifier = Modifier
-                .height(height = 200.dp)
                 .background(
                     color = MaterialTheme.colorScheme.surfaceColorAtElevation(
-                        3.dp
+                        10.dp
                     )
                 )
+                .height(height = if (isLandscapeSpacing()) 140.dp else 210.dp)
+                .padding(start = 14.dp, end = 14.dp)
+                .nestedScroll(nestedScrollConnection)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 20.dp)
-            ) {
-                //val coroutineScope = rememberCoroutineScope()
+            Column() {
 
-                /*Row(
+                Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 14.dp, end = 14.dp),
-                    horizontalArrangement = Arrangement.End
+                        .height(36.dp)
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(
-                        onClick = {
-                            coroutineScope.launch {
-                                if (bottomSheetScaffoldState.bottomSheetState.isExpanded) {
-                                    bottomSheetScaffoldState.bottomSheetState.animateTo(
-                                        BottomSheetValue.Collapsed,
-                                        tween(300)
-                                    )
-                                    bottomSheetExpanded =
-                                        BottomSheetValue.Collapsed
+                    Box(
+                        modifier = Modifier
+                            .width(48.dp)
+                            .height(4.dp)
+                            .pointerInput(Unit) {
+                                detectVerticalDragGestures(onDragEnd = {
+                                    coroutineScope.launch {
+                                        if (bottomSheetScaffoldState.currentFraction < 0.4) {
+                                            bottomSheetScaffoldState.bottomSheetState.animateTo(
+                                                BottomSheetValue.Collapsed,
+                                                tween(300)
+                                            )
+                                            bottomSheetExpanded = BottomSheetValue.Collapsed
+                                        } else {
+                                            bottomSheetScaffoldState.bottomSheetState.animateTo(
+                                                BottomSheetValue.Expanded,
+                                                tween(300)
+                                            )
+                                            bottomSheetExpanded = BottomSheetValue.Expanded
+                                        }
+                                    }
+                                }) { _, dragAmount ->
+                                    bottomSheetScaffoldState.bottomSheetState.performDrag(dragAmount)
                                 }
                             }
-                        }) {
-                        Icon(
-                            Icons.Outlined.KeyboardArrowDown,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
-                }*/
-
+                            .clip(shape = RoundedCornerShape(2.dp))
+                            .background(MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
+                }
                 if (changeDetail.value != null) {
                     val change = changeDetail.value!!
                     val message = change.commit?.trimmedMessage() ?: change.subject
-                    val messageLines = message.split("\n").size
-                    val firstMessageLine = message.split("\n").first()
-                    var expanded by remember { messageExpanded }
-                    var scrollState = rememberScrollState()
-
-                    Row(
+                    val number = change._number
+                    Column(
                         modifier = Modifier
+                            .fillMaxWidth()
                             .weight(1f, true)
-                            .padding(start = 14.dp, end = 14.dp),
-                        verticalAlignment = Alignment.Top
+                            .verticalScroll(state = changeDetailScrollState)
+                            .combinedClickable(onClick = {
+                                if (number.isNotEmpty()) {
+                                    showChangeInGerrit(number)
+                                }
+                            })
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f, true)
-                                .clipScrollableContainer(orientation = Orientation.Vertical)
-                                .verticalScroll(state = scrollState),
-                        ) {
+                        Row() {
                             Text(
-                                text = if (expanded) message else firstMessageLine,
-                                style = MaterialTheme.typography.bodyMedium
+                                text = message,
+                                style = MaterialTheme.typography.bodyMedium,
                             )
                         }
-                        if (messageLines > 2) {
-                            IconButton(
-                                onClick = {
-                                    messageExpanded.value = !messageExpanded.value
-                                }) {
-                                Icon(
-                                    if (expanded) Icons.Default.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onBackground
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Project:",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = change.project,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Branch:",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = change.branch,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                        }
+                        if (!change.owner.name.isNullOrEmpty()) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Owner:",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Text(
+                                    text = change.owner.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(start = 4.dp)
                                 )
                             }
                         }
-                    }
-                    if (!expanded) {
-                        Row(modifier = Modifier.padding(start = 14.dp, end = 14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "Project:" + change.project,
-                                style = MaterialTheme.typography.bodyMedium
+                                text = "Updated:",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = localDateTimeFormat.format(change.updatedInMillis),
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(start = 4.dp)
                             )
                         }
-                        /*Row(modifier = Modifier.padding(start = 14.dp, end = 14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "Branch:" + change.branch,
-                                style = MaterialTheme.typography.bodyMedium
+                                text = "Number:",
+                                style = MaterialTheme.typography.titleMedium
                             )
-                        }*/
+                            Text(
+                                text = change._number,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                        }
+                    }
 
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 14.dp, end = 14.dp),
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            Button(onClick = {
-                                val uri = Uri.parse(
-                                    RetrofitManager.gerritBaseUrl + "#/c/" + changeDetail.value!!._number
-                                )
-                                val intent = Intent(Intent.ACTION_VIEW, uri)
-                                startActivity(intent)
-                            }) {
-                                Text(text = "Show")
+                    /*Row(
+                        modifier = Modifier
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        Button(onClick = {
+                            if (number.isNotEmpty()) {
+                                showChangeInGerrit(number)
                             }
+                        }) {
+                            Text(text = "Show")
                         }
-                    }
+                    }*/
                 }
             }
         }
     }
+
+    private fun showChangeInGerrit(number: String) {
+        val uri = Uri.parse(
+            RetrofitManager.gerritBaseUrl + "#/c/" + number
+        )
+        val intent = Intent(Intent.ACTION_VIEW, uri)
+        startActivity(intent)
+    }
+
+    @Composable
+    fun isLandscapeSpacing(): Boolean {
+        val configuration = LocalConfiguration.current
+        val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        return isLandscape && !isTablet
+    }
+
+
 }

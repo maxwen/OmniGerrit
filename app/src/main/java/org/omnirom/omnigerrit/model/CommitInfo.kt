@@ -9,6 +9,6 @@ data class CommitInfo(val commit: String = "", val subject: String = "", val mes
         message.replace("\n\n", "\n").trim().split("\n")
             .filter { line -> !line.startsWith("Change-Id") }
             .forEach { line -> strippedMessage += line + "\n" }
-        return strippedMessage
+        return strippedMessage.trim()
     }
 }

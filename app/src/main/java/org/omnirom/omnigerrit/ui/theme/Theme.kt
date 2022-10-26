@@ -1,6 +1,7 @@
 package org.omnirom.omnigerrit.ui.theme
 
 import android.app.Activity
+import android.content.res.Configuration
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
@@ -11,14 +12,16 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.ViewCompat
+import kotlin.math.min
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+    primary = Purple40,
+    secondary = PurpleGrey40,
+    tertiary = Pink40
 )
 
 private val LightColorScheme = lightColorScheme(
@@ -36,6 +39,13 @@ private val LightColorScheme = lightColorScheme(
     onSurface = Color(0xFF1C1B1F),
     */
 )
+
+var isTablet = false
+
+fun isTablet(configuration: Configuration): Boolean {
+    val dpi = min(configuration.screenWidthDp, configuration.screenHeightDp)
+    return dpi >= 600
+}
 
 @Composable
 fun OmniGerritTheme(
@@ -59,6 +69,8 @@ fun OmniGerritTheme(
             ViewCompat.getWindowInsetsController(view)?.isAppearanceLightStatusBars = !darkTheme
         }
     }
+
+    isTablet = isTablet(LocalConfiguration.current)
 
     MaterialTheme(
         colorScheme = colorScheme,

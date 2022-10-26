@@ -1,14 +1,20 @@
 package org.omnirom.omnigerrit.model
 
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.omnirom.omnigerrit.retrofit.GerritApi
 import org.omnirom.omnigerrit.utils.BuildImageUtils
 import org.omnirom.omnigerrit.utils.LogUtils
@@ -23,12 +29,14 @@ class MainViewModel() : ViewModel() {
 
     val gerritApi: GerritApi = RetrofitManager.getGerritInstance().create(GerritApi::class.java)
 
-    private val _change = MutableStateFlow<Change?>(null)
-    val changeFlow = _change.asStateFlow()
+    private val _changeDetail = MutableStateFlow<Change?>(null)
+    val changeDetail = _changeDetail.asStateFlow()
 
-    val reloadFlow = MutableSharedFlow<Boolean>()
+    val triggerReload = MutableSharedFlow<Boolean>()
 
     var buildsMap = mapOf<Long, BuildImage>()
+    private var _buildsMapLoaded = MutableStateFlow<Boolean>(false)
+    val buildsMapLoaded = _buildsMapLoaded.asStateFlow()
 
     private val initialIsConnected by lazy {
         NetworkUtils.connectivityObserver.peekStatus()
@@ -39,6 +47,12 @@ class MainViewModel() : ViewModel() {
 
     private val _queryString = MutableStateFlow<String>("")
     val queryString = _queryString.asStateFlow()
+
+    private val _projectFilter = MutableStateFlow<Boolean>(false)
+    val projectFilter = _projectFilter.asStateFlow()
+
+    private var _snackbarShow = MutableSharedFlow<String>()
+    val snackbarShow = _snackbarShow.asSharedFlow()
 
     init {
         viewModelScope.launch {
@@ -67,15 +81,17 @@ class MainViewModel() : ViewModel() {
     fun reload() {
         LogUtils.d(TAG, "reload")
         initDeviceBuilds()
-        _change.value = null
+        _changeDetail.value = null
         viewModelScope.launch {
-            reloadFlow.emit(true)
+            triggerReload.emit(true)
         }
     }
 
     fun loadChange(change: Change) {
         viewModelScope.launch {
-            val changes = gerritApi.getChanges(params = change.id, options = listOf("CURRENT_REVISION"))
+            // TODO
+            //_changeDetail.value = null
+            val changes = gerritApi.getChanges(params = change.id, options = listOf("CURRENT_REVISION", "DETAILED_ACCOUNTS"))
             if (changes.isSuccessful && changes.body() != null) {
                 val changeList = changes.body()!!
                 if (changeList.size == 1) {
@@ -85,27 +101,43 @@ class MainViewModel() : ViewModel() {
                         val commit = commit.body()
                         changeDetail.commit = commit
                     }
-                    _change.value = changeDetail
-                    LogUtils.d(TAG, "changeDetail = " + changeFlow.value)
+                    _changeDetail.value = changeDetail
+                    LogUtils.d(TAG, "changeDetail = " + this@MainViewModel.changeDetail.value)
                     return@launch
                 }
             }
-            _change.value = null
+            _changeDetail.value = null
         }
     }
 
 
     private fun initDeviceBuilds() {
         viewModelScope.launch {
-            runBlocking {
+            withContext(Dispatchers.IO) {
                 buildsMap =
                     BuildImageUtils.getDeviceBuildsMap(BuildImageUtils.getDeviceBuilds())
                 LogUtils.d(TAG, "buildsMap = " + buildsMap)
+                _buildsMapLoaded.value = true
+                triggerReload.emit(true)
             }
         }
     }
 
     fun setQueryString(q : String) {
         _queryString.value = q
+    }
+
+    fun toggleProjectFilter() {
+        _projectFilter.value = !_projectFilter.value
+        _changeDetail.value = null
+        viewModelScope.launch {
+            triggerReload.emit(true)
+        }
+    }
+
+    fun showSnackbarMessage(message: String) {
+        viewModelScope.launch {
+            _snackbarShow.emit(message)
+        }
     }
 }

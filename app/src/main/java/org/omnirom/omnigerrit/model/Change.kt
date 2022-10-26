@@ -27,7 +27,7 @@ data class Change(
     val _number: String = "",
     val current_revision: String = "",
     var commit: CommitInfo? = null,
-    val owner: Owner = Owner("John Doe", 4211)
+    val owner: Owner = Owner("", -1)
 ) {
     constructor(buildImage: BuildImage) : this(
         subject = buildImage.filename,

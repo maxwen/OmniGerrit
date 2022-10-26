@@ -35,9 +35,14 @@ interface GerritApi {
     ): Response<List<Change>>
 
     @GET("changes/{id}/detail")
-    suspend fun getChange(
+    suspend fun getChangeDetail(
         @Path("id") id: String,
     ): Response<Change>
+
+    @GET("changes/{id}/topic")
+    suspend fun getChangeTopic(
+        @Path("id") id: String,
+    ): Response<String>
 
     @GET("changes/{id}/revisions/{revision}/commit")
     suspend fun getCommit(

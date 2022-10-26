@@ -45,7 +45,7 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
             val pageIndex = startKey
 
             val queryResultList = mutableListOf<Change>()
-            if (viewModel.isConnected.value) {
+            if (viewModel.isConnected.value && viewModel.buildsMapLoaded.value) {
                 fillResultList(queryResultList)
             }
 
@@ -87,8 +87,11 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
                 if (changeList.isEmpty()) {
                     break
                 } else {
-                    queryResultList.addAll(changeList.filter { ChangeFilter.showProject(it.project) })
-                    //queryResultList.addAll(changeList)
+                    if (viewModel.projectFilter.value) {
+                        queryResultList.addAll(changeList.filter { ChangeFilter.showProject(it.project) })
+                    } else {
+                        queryResultList.addAll(changeList)
+                    }
                     offset += GERRIT_QUERY_LIMIT
                 }
             }
