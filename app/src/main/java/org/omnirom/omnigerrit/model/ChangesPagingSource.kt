@@ -44,7 +44,7 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
             val pageIndex = startKey
 
             val queryResultList = mutableListOf<Change>()
-            if (viewModel.isConnected.value && viewModel.buildsMapLoaded.value) {
+            if (viewModel.isConnected.value && viewModel.buildsMapLoaded.value && ChangeFilter.deviceMapLoaded.value) {
                 fillResultList(queryResultList)
             }
 
@@ -54,7 +54,7 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
 
             LogUtils.d(
                 TAG,
-                "queryResultList = " + pageIndex + " " + startKey
+                "queryResultList = " + pageIndex + " " + startKey + " " + newCount
             )
             LoadResult.Page(
                 data = queryResultList,

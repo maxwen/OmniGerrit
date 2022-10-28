@@ -69,7 +69,6 @@ import org.omnirom.omnigerrit.model.ChangeFilter
 import org.omnirom.omnigerrit.model.MainViewModel
 import org.omnirom.omnigerrit.ui.theme.OmniGerritTheme
 import org.omnirom.omnigerrit.ui.theme.isTablet
-import org.omnirom.omnigerrit.utils.LogUtils
 import org.omnirom.omniota.model.RetrofitManager
 import java.lang.Math.max
 import java.text.DateFormat
@@ -298,7 +297,7 @@ class MainActivity : ComponentActivity() {
         val queryString = viewModel.queryString.collectAsState()
 
         Column(modifier = Modifier.padding(start = 14.dp, end = 14.dp)) {
-            Row(modifier = Modifier.padding(4.dp)) {
+            Row() {
                 OutlinedTextField(
                     value = queryString.value,
                     onValueChange = {
@@ -331,10 +330,12 @@ class MainActivity : ComponentActivity() {
             val buildsMapLoaded = viewModel.buildsMapLoaded.collectAsState()
 
             if (connected.value) {
-                LazyColumn(modifier = Modifier.padding(top = 10.dp), state = changesListState) {
+                var lastChange: Change? = null
+                LazyColumn(modifier = Modifier.padding(top = 4.dp), state = changesListState) {
                     itemsIndexed(items = changesPager!!) { index, change ->
                         val changeTime = change!!.updatedInMillis
-                        ChangeItem(index, change, changeTime)
+                        ChangeItem(index, change, changeTime, lastChange)
+                        lastChange = change
                     }
                     when {
                         changesPager!!.loadState.refresh is LoadState.Loading -> {
@@ -370,7 +371,8 @@ class MainActivity : ComponentActivity() {
     fun ChangeItem(
         index: Int,
         change: Change,
-        changeTime: Long
+        changeTime: Long,
+        lastChange: Change?
     ) {
         val selected =
             changeDetail.value != null && changeDetail.value!!.id == change.id
@@ -383,15 +385,17 @@ class MainActivity : ComponentActivity() {
         }
 
         val date = localDateTimeFormat.format(changeTime)
+        var newDay = false
+        /*if (lastChange != null) {
+            if (localDateFormat.format(lastChange.updatedInMillis) != localDateFormat.format(change.updatedInMillis)) {
+                newDay = true
+            }
+        }*/
         Row(
             modifier = Modifier
                 .background(bgColor)
-                .padding(top = 4.dp, bottom = 4.dp)
+                .padding(top = if (newDay) 16.dp else 4.dp, bottom = 4.dp)
                 .combinedClickable(onClick = {
-                    LogUtils.d(
-                        TAG,
-                        "" + index + " : " + changesListState.firstVisibleItemIndex + " " + changesListState.layoutInfo.viewportStartOffset + " " + changesListState.layoutInfo.viewportEndOffset
-                    )
                     if (change.id.isNotEmpty()) {
                         coroutineScope.launch {
                             // scroll up if behind bottom sheet
@@ -416,7 +420,7 @@ class MainActivity : ComponentActivity() {
                 }),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column() {
+            Column {
                 Text(
                     text = change.subject,
                     modifier = Modifier.fillMaxWidth(),
@@ -430,13 +434,13 @@ class MainActivity : ComponentActivity() {
                     maxLines = 1,
                     style = MaterialTheme.typography.bodySmall
                 )
-                /*Text(
+                Text(
                     text = change.project,
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodySmall
-                )*/
+                )
             }
         }
     }
@@ -516,7 +520,7 @@ class MainActivity : ComponentActivity() {
                         10.dp
                     )
                 )
-                .height(height = if (isLandscapeSpacing()) 100.dp else 220.dp)
+                .height(height = if (isLandscapeSpacing()) 140.dp else 220.dp)
                 .padding(start = 14.dp, end = 14.dp)
                 .nestedScroll(nestedScrollConnection)
         ) {
@@ -745,7 +749,7 @@ class MainActivity : ComponentActivity() {
         startActivity(intent)
     }
 
-    fun isLandscapeSpacing(): Boolean {
+    private fun isLandscapeSpacing(): Boolean {
         val configuration = this.resources.configuration
         val isLandscape =
             configuration.orientation == Configuration.ORIENTATION_LANDSCAPE

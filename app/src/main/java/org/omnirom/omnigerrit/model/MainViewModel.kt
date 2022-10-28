@@ -35,8 +35,7 @@ class MainViewModel() : ViewModel() {
     val triggerReload = MutableSharedFlow<Boolean>()
 
     var buildsMap = mapOf<Long, BuildImage>()
-    private var _buildsMapLoaded = MutableStateFlow<Boolean>(false)
-    val buildsMapLoaded = _buildsMapLoaded.asStateFlow()
+    val buildsMapLoaded = MutableStateFlow<Boolean>(false)
 
     private val initialIsConnected by lazy {
         NetworkUtils.connectivityObserver.peekStatus()
@@ -45,6 +44,7 @@ class MainViewModel() : ViewModel() {
         MutableStateFlow(initialIsConnected == ConnectivityObserver.Status.Available)
     val isConnected = _isConnected.asStateFlow()
 
+    // TODO - save in settings
     val queryString = MutableStateFlow<String>("")
     val queryDateAfter = MutableStateFlow<String>("")
     val projectFilter = MutableStateFlow<Boolean>(false)
@@ -70,7 +70,14 @@ class MainViewModel() : ViewModel() {
                 _isConnected.value = connected
             }
         }
-        initDeviceBuilds()
+
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                initDeviceBuildSync()
+                ChangeFilter.loadProjectFilterConfigFile()
+                triggerReload.emit(true)
+            }
+        }
     }
 
     private fun getChangesPaging(): Flow<PagingData<Change>> {
@@ -88,9 +95,6 @@ class MainViewModel() : ViewModel() {
         LogUtils.d(TAG, "reload")
         initDeviceBuilds()
         //_changeDetail.value = null
-        viewModelScope.launch {
-            triggerReload.emit(true)
-        }
     }
 
     fun loadChange(change: Change) {
@@ -120,13 +124,17 @@ class MainViewModel() : ViewModel() {
     private fun initDeviceBuilds() {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                buildsMap =
-                    BuildImageUtils.getDeviceBuildsMap(BuildImageUtils.getDeviceBuilds())
-                LogUtils.d(TAG, "buildsMap = " + buildsMap)
-                _buildsMapLoaded.value = true
+                initDeviceBuildSync()
                 triggerReload.emit(true)
             }
         }
+    }
+
+    private suspend fun initDeviceBuildSync() {
+        buildsMap =
+            BuildImageUtils.getDeviceBuildsMap(BuildImageUtils.getDeviceBuilds())
+        LogUtils.d(TAG, "buildsMap = " + buildsMap)
+        buildsMapLoaded.value = true
     }
 
     fun setQueryString(q: String) {
