@@ -16,7 +16,6 @@
 
 package org.omnirom.omnigerrit.model
 
-import androidx.lifecycle.ViewModel
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
 import org.omnirom.omnigerrit.utils.LogUtils
@@ -77,7 +76,10 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
     private suspend fun fillResultList(queryResultList: MutableList<Change>) {
         while (queryResultList.size < PAGE_SIZE) {
             val changes = viewModel.gerritApi.getChanges(
-                ChangeFilter.createQueryString(message = viewModel.queryString.value),
+                ChangeFilter.createQueryString(
+                    message = viewModel.queryString.value,
+                    after = viewModel.queryDateAfter.value
+                ),
                 options = listOf("DETAILED_ACCOUNTS"),
                 limit = GERRIT_QUERY_LIMIT.toString(),
                 offset = offset.toString()

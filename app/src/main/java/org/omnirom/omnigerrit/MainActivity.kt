@@ -1,6 +1,7 @@
 package org.omnirom.omnigerrit
 
 import android.annotation.SuppressLint
+import android.app.DatePickerDialog
 import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
@@ -8,7 +9,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.animation.core.tween
+import androidx.appcompat.view.ContextThemeWrapper
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
@@ -21,7 +22,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -29,19 +32,22 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -59,11 +65,13 @@ import androidx.paging.compose.itemsIndexed
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.omnirom.omnigerrit.model.Change
+import org.omnirom.omnigerrit.model.ChangeFilter
 import org.omnirom.omnigerrit.model.MainViewModel
-import org.omnirom.omnigerrit.model.Settings
 import org.omnirom.omnigerrit.ui.theme.OmniGerritTheme
 import org.omnirom.omnigerrit.ui.theme.isTablet
+import org.omnirom.omnigerrit.utils.LogUtils
 import org.omnirom.omniota.model.RetrofitManager
+import java.lang.Math.max
 import java.text.DateFormat
 import java.util.*
 
@@ -71,17 +79,16 @@ import java.util.*
 class MainActivity : ComponentActivity() {
     val TAG = "MainActivity"
     private val viewModel by viewModels<MainViewModel>()
-    private lateinit var changesPager: LazyPagingItems<Change>
+    private var changesPager: LazyPagingItems<Change>? = null
     private lateinit var changesListState: LazyListState
     private lateinit var changeDetail: State<Change?>
 
-    var bottomSheetExpanded = BottomSheetValue.Collapsed
     lateinit var bottomSheetScaffoldState: BottomSheetScaffoldState
     lateinit var localDateTimeFormat: DateFormat
     lateinit var localDateFormat: DateFormat
-    private var queryListenerStarted = false
     private val snackbarHostState = SnackbarHostState()
     private val changeDetailScrollState = ScrollState(0)
+    private val bottomSheetValue = mutableStateOf(BottomSheetValue.Collapsed)
 
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -97,7 +104,7 @@ class MainActivity : ComponentActivity() {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.triggerReload.collectLatest {
                     if (viewModel.isConnected.value) {
-                        changesPager.refresh()
+                        changesPager?.refresh()
                     }
                 }
             }
@@ -105,7 +112,7 @@ class MainActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.snackbarShow.collect { message ->
+                viewModel.snackbarShow.collectLatest { message ->
                     snackbarHostState.showSnackbar(
                         message = message,
                     )
@@ -113,21 +120,32 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        lifecycleScope.launch {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.queryFilter.collectLatest {
+                    if (viewModel.isConnected.value) {
+                        changesPager?.refresh()
+                    }
+                }
+            }
+        }
+
         setContent {
             OmniGerritTheme {
+                val bottomSheetValue = rememberSaveable { bottomSheetValue }
+
                 bottomSheetScaffoldState = rememberBottomSheetScaffoldState(
-                    bottomSheetState = BottomSheetState(initialValue = bottomSheetExpanded)
+                    bottomSheetState = BottomSheetState(initialValue = bottomSheetValue.value)
                 )
                 changeDetail = viewModel.changeDetail.collectAsState()
                 changesPager = viewModel.changesPager.collectAsLazyPagingItems()
 
-                if (!queryListenerStarted) {
-                    startQueryListener()
-                    queryListenerStarted = true
-                }
-
                 changesListState = rememberLazyListState()
                 val projectFilter = viewModel.projectFilter.collectAsState()
+                var queryDateAfterExpanded by remember { mutableStateOf(false) }
+                val queryDateAfter = viewModel.queryDateAfter.collectAsState()
+
+                val coroutineScope = rememberCoroutineScope()
 
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -135,47 +153,114 @@ class MainActivity : ComponentActivity() {
                 ) {
                     Scaffold(
                         topBar = {
-                            TopAppBar(title = {
-                                Text(
-                                    text = stringResource(id = R.string.app_name)
-                                )
-                            }, actions = {
-                                IconButton(
-                                    onClick = {
-                                        viewModel.showSnackbarMessage("Nothing to see here yet")
-                                    }
-                                ) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.ic_settings),
-                                        contentDescription = "",
+                            TopAppBar(
+                                title = {
+                                    Text(
+                                        text = stringResource(id = R.string.app_name)
                                     )
-                                }
-                            })
+                                },
+                                actions = {
+                                    IconButton(
+                                        onClick = {
+                                            viewModel.showSnackbarMessage("Nothing to see here yet")
+                                        }
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.ic_settings),
+                                            contentDescription = "",
+                                        )
+                                    }
+                                },
+                            )
                         },
                         bottomBar = {
-                            BottomAppBar(actions = {
-                                IconButton(
-                                    onClick = {
-                                        viewModel.toggleProjectFilter()
+                            BottomAppBar(
+                                actions = {
+                                    IconButton(
+                                        onClick = {
+                                            viewModel.toggleProjectFilter()
+                                            // TODO - hide bottomsheet on refresh?
+                                            /*coroutineScope.launch {
+                                                updateBottomSheetState(
+                                                    BottomSheetValue.Collapsed
+                                                )
+                                            }*/
+                                        }
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(id = if (projectFilter.value) R.drawable.ic_filter_off else R.drawable.ic_filter),
+                                            contentDescription = "",
+                                        )
                                     }
-                                ) {
-                                    Icon(
-                                        painter = painterResource(id = if (projectFilter.value) R.drawable.ic_filter_off else R.drawable.ic_filter),
-                                        contentDescription = "",
-                                    )
-                                }
-                            }, floatingActionButton = {
-                                FloatingActionButton(onClick = {
-                                    if (viewModel.isConnected.value) {
-                                        viewModel.reload()
+                                    IconButton(
+                                        onClick = {
+                                            queryDateAfterExpanded = true
+                                        }
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.show_since),
+                                            contentDescription = "",
+                                        )
                                     }
-                                }) {
-                                    Icon(
-                                        Icons.Outlined.Refresh,
-                                        contentDescription = null,
-                                    )
-                                }
-                            })
+                                    DropdownMenu(
+                                        expanded = queryDateAfterExpanded,
+                                        onDismissRequest = { queryDateAfterExpanded = false },
+                                        modifier = Modifier.background(MaterialTheme.colorScheme.background)
+                                    ) {
+                                        DropdownMenuItem(
+                                            onClick = {
+                                                viewModel.setQueryDateAfter("")
+                                                // TODO - hide bottomsheet on refresh?
+                                                /*coroutineScope.launch {
+                                                    updateBottomSheetState(
+                                                        BottomSheetValue.Collapsed
+                                                    )
+                                                }*/
+                                                queryDateAfterExpanded = false
+                                            }, leadingIcon = {
+                                                Icon(
+                                                    painter = painterResource(id = R.drawable.ic_filter_off),
+                                                    contentDescription = "",
+                                                )
+                                            }, text = {
+                                                Text(
+                                                    text = "Disable",
+                                                )
+                                            })
+                                        DropdownMenuItem(
+                                            onClick = {
+                                                doSelectStartTime()
+                                                queryDateAfterExpanded = false
+                                            }, leadingIcon = {
+                                                Icon(
+                                                    painter = painterResource(id = R.drawable.show_since),
+                                                    contentDescription = "",
+                                                )
+                                            }, text = {
+                                                Text(
+                                                    text = "Since" + if (queryDateAfter.value.isNotEmpty()) " - " + queryDateAfter.value else "",
+                                                )
+                                            })
+                                    }
+                                },
+                                floatingActionButton = {
+                                    FloatingActionButton(onClick = {
+                                        if (viewModel.isConnected.value) {
+                                            viewModel.reload()
+                                            // TODO - hide bottomsheet on refresh?
+                                            /*coroutineScope.launch {
+                                                updateBottomSheetState(
+                                                    BottomSheetValue.Collapsed
+                                                )
+                                            }*/
+                                        }
+                                    }) {
+                                        Icon(
+                                            Icons.Outlined.Refresh,
+                                            contentDescription = null,
+                                        )
+                                    }
+                                })
                         },
                         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
                     )
@@ -247,20 +332,20 @@ class MainActivity : ComponentActivity() {
 
             if (connected.value) {
                 LazyColumn(modifier = Modifier.padding(top = 10.dp), state = changesListState) {
-                    itemsIndexed(items = changesPager) { index, change ->
+                    itemsIndexed(items = changesPager!!) { index, change ->
                         val changeTime = change!!.updatedInMillis
                         ChangeItem(index, change, changeTime)
                     }
                     when {
-                        changesPager.loadState.refresh is LoadState.Loading -> {
+                        changesPager!!.loadState.refresh is LoadState.Loading -> {
                             item { LoadingView(modifier = Modifier.fillParentMaxSize()) }
                         }
-                        changesPager.loadState.append is LoadState.Loading -> {
+                        changesPager!!.loadState.append is LoadState.Loading -> {
                             item { LoadingView(modifier = Modifier.fillParentMaxSize()) }
                         }
-                        changesPager.loadState.refresh is LoadState.Error -> {
+                        changesPager!!.loadState.refresh is LoadState.Error -> {
                         }
-                        changesPager.loadState.append is LoadState.Error -> {
+                        changesPager!!.loadState.append is LoadState.Error -> {
                         }
                         !buildsMapLoaded.value -> {
                             item { LoadingView(modifier = Modifier.fillParentMaxSize()) }
@@ -273,13 +358,7 @@ class MainActivity : ComponentActivity() {
                 // close bottom sheet
                 LaunchedEffect(key1 = connected, block = {
                     if (!connected.value) {
-                        if (bottomSheetScaffoldState.bottomSheetState.isExpanded) {
-                            bottomSheetScaffoldState.bottomSheetState.animateTo(
-                                BottomSheetValue.Collapsed,
-                                tween(300)
-                            )
-                            bottomSheetExpanded = BottomSheetValue.Collapsed
-                        }
+                        updateBottomSheetState(BottomSheetValue.Collapsed)
                     }
                 })
             }
@@ -309,28 +388,26 @@ class MainActivity : ComponentActivity() {
                 .background(bgColor)
                 .padding(top = 4.dp, bottom = 4.dp)
                 .combinedClickable(onClick = {
+                    LogUtils.d(
+                        TAG,
+                        "" + index + " : " + changesListState.firstVisibleItemIndex + " " + changesListState.layoutInfo.viewportStartOffset + " " + changesListState.layoutInfo.viewportEndOffset
+                    )
                     if (change.id.isNotEmpty()) {
                         coroutineScope.launch {
+                            // scroll up if behind bottom sheet
                             if (bottomSheetScaffoldState.bottomSheetState.isCollapsed) {
-                                bottomSheetScaffoldState.bottomSheetState.animateTo(
-                                    BottomSheetValue.Expanded,
-                                    tween(300)
-                                )
-                                bottomSheetExpanded = BottomSheetValue.Expanded
-                                // TODO
-                                changesListState.animateScrollToItem(index)
+                                if (isLandscapeSpacing()) {
+                                    changesListState.animateScrollToItem(0)
+                                } else {
+                                    if (index - changesListState.firstVisibleItemIndex > 5) {
+                                        changesListState.animateScrollToItem(max(0, index - 5))
+                                    }
+                                }
                             }
+                            updateBottomSheetState(BottomSheetValue.Expanded)
                             changeDetailScrollState.scrollTo(0)
                         }
                         viewModel.loadChange(change)
-
-                        coroutineScope.launch {
-                            if (!Settings.isDetailsHintShown()) {
-                                // TODO snackbar might not be the optimal way to do this
-                                viewModel.showSnackbarMessage("Click to show change in browser")
-                                Settings.setDetailsHintShown(true)
-                            }
-                        }
                     }
                 }, onLongClick = {
                     if (change._number.isNotEmpty()) {
@@ -396,18 +473,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun startQueryListener() {
-        lifecycleScope.launch {
-            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.queryString.collectLatest {
-                    if (viewModel.isConnected.value) {
-                        changesPager.refresh()
-                    }
-                }
-            }
-        }
-    }
-
     @OptIn(ExperimentalMaterialApi::class)
     val BottomSheetScaffoldState.currentFraction: Float
         get() {
@@ -443,6 +508,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        val selectedTab = rememberSaveable { mutableStateOf<Int>(0) }
         Column(
             modifier = Modifier
                 .background(
@@ -450,7 +516,7 @@ class MainActivity : ComponentActivity() {
                         10.dp
                     )
                 )
-                .height(height = if (isLandscapeSpacing()) 140.dp else 210.dp)
+                .height(height = if (isLandscapeSpacing()) 100.dp else 220.dp)
                 .padding(start = 14.dp, end = 14.dp)
                 .nestedScroll(nestedScrollConnection)
         ) {
@@ -470,18 +536,10 @@ class MainActivity : ComponentActivity() {
                             .pointerInput(Unit) {
                                 detectVerticalDragGestures(onDragEnd = {
                                     coroutineScope.launch {
-                                        if (bottomSheetScaffoldState.currentFraction < 0.4) {
-                                            bottomSheetScaffoldState.bottomSheetState.animateTo(
-                                                BottomSheetValue.Collapsed,
-                                                tween(300)
-                                            )
-                                            bottomSheetExpanded = BottomSheetValue.Collapsed
+                                        if (bottomSheetScaffoldState.currentFraction < 0.5) {
+                                            forceUpdateBottomSheetState(BottomSheetValue.Collapsed)
                                         } else {
-                                            bottomSheetScaffoldState.bottomSheetState.animateTo(
-                                                BottomSheetValue.Expanded,
-                                                tween(300)
-                                            )
-                                            bottomSheetExpanded = BottomSheetValue.Expanded
+                                            forceUpdateBottomSheetState(BottomSheetValue.Expanded)
                                         }
                                     }
                                 }) { _, dragAmount ->
@@ -500,92 +558,180 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f, true)
-                            .verticalScroll(state = changeDetailScrollState)
-                            .combinedClickable(onClick = {
-                                if (number.isNotEmpty()) {
-                                    showChangeInGerrit(number)
-                                }
-                            })
                     ) {
-                        Row() {
-                            Text(
-                                text = message,
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Project:",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = change.project,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(start = 4.dp)
-                            )
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Branch:",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = change.branch,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(start = 4.dp)
-                            )
-                        }
-                        if (!change.owner.name.isNullOrEmpty()) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "Owner:",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Text(
-                                    text = change.owner.name,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.padding(start = 4.dp)
+                        TabRow(
+                            containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(
+                                10.dp
+                            ),
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                            selectedTabIndex = selectedTab.value,
+                            divider = {},
+                            indicator = { tabPositions ->
+                                Box(
+                                    Modifier
+                                        .tabIndicatorOffset(tabPositions[selectedTab.value])
+                                        .padding(5.dp)
+                                        .fillMaxSize()
+                                        .border(
+                                            BorderStroke(
+                                                1.dp,
+                                                MaterialTheme.colorScheme.outline
+                                            ), RoundedCornerShape(20.dp)
+                                        )
                                 )
                             }
+                        ) {
+                            Tab(
+                                selected = false,
+                                text = {
+                                    Text(
+                                        text = "Message",
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                },
+                                onClick = { selectedTab.value = 0 })
+                            Tab(
+                                selected = false,
+                                text = {
+                                    Text(
+                                        text = "Details",
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                },
+                                onClick = { selectedTab.value = 1 })
+                            Tab(
+                                selected = false,
+                                text = {
+                                    Text(
+                                        text = "More",
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                },
+                                onClick = { selectedTab.value = 2 })
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Updated:",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = localDateTimeFormat.format(change.updatedInMillis),
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(start = 4.dp)
-                            )
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Number:",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = change._number,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(start = 4.dp)
-                            )
+                        when (selectedTab.value) {
+                            0 -> {
+                                Column(
+                                    modifier = Modifier
+                                        .verticalScroll(state = changeDetailScrollState)
+                                        .padding(top = 4.dp)
+                                        .fillMaxWidth()
+                                ) {
+                                    Row() {
+                                        Text(
+                                            text = message,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                        )
+                                    }
+                                }
+                            }
+                            1 -> {
+                                Column(
+                                    modifier = Modifier
+                                        .verticalScroll(state = changeDetailScrollState)
+                                        .padding(top = 4.dp)
+                                        .fillMaxWidth()
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            text = "Project:",
+                                            style = MaterialTheme.typography.titleMedium
+                                        )
+                                        Text(
+                                            text = change.project,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.padding(start = 4.dp)
+                                        )
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "Branch:",
+                                            style = MaterialTheme.typography.titleMedium
+                                        )
+                                        Text(
+                                            text = change.branch,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.padding(start = 4.dp)
+                                        )
+                                    }
+                                    if (!change.owner.name.isNullOrEmpty()) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = "Owner:",
+                                                style = MaterialTheme.typography.titleMedium
+                                            )
+                                            Text(
+                                                text = change.owner.name,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.padding(start = 4.dp)
+                                            )
+                                        }
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "Updated:",
+                                            style = MaterialTheme.typography.titleMedium
+                                        )
+                                        Text(
+                                            text = localDateTimeFormat.format(change.updatedInMillis),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.padding(start = 4.dp)
+                                        )
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "Number:",
+                                            style = MaterialTheme.typography.titleMedium
+                                        )
+                                        Text(
+                                            text = change._number,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.padding(start = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            2 -> {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 4.dp)
+                                        .weight(1f, true),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Button(onClick = {
+                                        if (number.isNotEmpty()) {
+                                            showChangeInGerrit(number)
+                                        }
+                                    }) {
+                                        Icon(
+                                            painterResource(id = R.drawable.ic_web),
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                        )
+                                        Text(
+                                            text = "Show", color = Color.White,
+                                            modifier = Modifier
+                                                .padding(start = 14.dp),
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
-
-                    /*Row(
-                        modifier = Modifier
-                            .fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.Bottom
-                    ) {
-                        Button(onClick = {
-                            if (number.isNotEmpty()) {
-                                showChangeInGerrit(number)
-                            }
-                        }) {
-                            Text(text = "Show")
-                        }
-                    }*/
                 }
             }
         }
@@ -599,12 +745,59 @@ class MainActivity : ComponentActivity() {
         startActivity(intent)
     }
 
-    @Composable
     fun isLandscapeSpacing(): Boolean {
-        val configuration = LocalConfiguration.current
-        val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val configuration = this.resources.configuration
+        val isLandscape =
+            configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         return isLandscape && !isTablet
     }
 
+    private fun doSelectStartTime() {
+        val c = Calendar.getInstance()
+        if (viewModel.queryDateAfter.value.isNotEmpty()) {
+            c.timeInMillis =
+                ChangeFilter.gerritDateFormat.parse(viewModel.queryDateAfter.value)?.time ?: 0
+        }
+        val day = c[Calendar.DAY_OF_MONTH]
+        val year = c[Calendar.YEAR]
+        val month = c[Calendar.MONTH]
+        val datePickerDialog = DatePickerDialog(
+            ContextThemeWrapper(this, R.style.Theme_OmniGerrit),
+            { view, year, monthOfYear, dayOfMonth ->
+                val c = Calendar.getInstance()
+                c.timeZone = TimeZone.getTimeZone("UTC")
+                c[Calendar.DAY_OF_MONTH] = dayOfMonth
+                c[Calendar.YEAR] = year
+                c[Calendar.MONTH] = monthOfYear
+                c[Calendar.HOUR_OF_DAY] = 0
+                c[Calendar.MINUTE] = 0
+                bottomSheetValue.value = BottomSheetValue.Collapsed
+                viewModel.setQueryDateAfter(ChangeFilter.gerritDateFormat.format(c.timeInMillis))
+            }, year, month, day
+        )
+        datePickerDialog.show()
+    }
 
+    private suspend fun updateBottomSheetState(bottomSheetState: BottomSheetValue) {
+        if (bottomSheetState == BottomSheetValue.Collapsed) {
+            if (bottomSheetScaffoldState.bottomSheetState.isExpanded) {
+                bottomSheetScaffoldState.bottomSheetState.collapse()
+                bottomSheetValue.value = bottomSheetState
+            }
+        } else {
+            if (bottomSheetScaffoldState.bottomSheetState.isCollapsed) {
+                bottomSheetScaffoldState.bottomSheetState.expand()
+                bottomSheetValue.value = bottomSheetState
+            }
+        }
+    }
+
+    private suspend fun forceUpdateBottomSheetState(bottomSheetState: BottomSheetValue) {
+        if (bottomSheetState == BottomSheetValue.Collapsed) {
+            bottomSheetScaffoldState.bottomSheetState.collapse()
+        } else {
+            bottomSheetScaffoldState.bottomSheetState.expand()
+        }
+        bottomSheetValue.value = bottomSheetState
+    }
 }

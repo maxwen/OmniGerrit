@@ -6,13 +6,21 @@ import java.util.*
 object ChangeFilter {
     var defaultBranch: String = ""
     val gerritDateTimeFormat by lazy {
+        initDateTimeFormat()
+    }
+    val gerritDateFormat by lazy {
         initDateFormat()
     }
-
     private val hideProjectList = listOf("android_device_", "android_hardware_", "android_kernel_")
 
-    private fun initDateFormat(): SimpleDateFormat {
+    private fun initDateTimeFormat(): SimpleDateFormat {
         val format = SimpleDateFormat("yyyy-MM-dd HH:mm")
+        format.timeZone = TimeZone.getTimeZone("UTC")
+        return format
+    }
+
+    private fun initDateFormat(): SimpleDateFormat {
+        val format = SimpleDateFormat("yyyy-MM-dd")
         format.timeZone = TimeZone.getTimeZone("UTC")
         return format
     }
@@ -21,11 +29,15 @@ object ChangeFilter {
         Merged, Open
     }
 
+    data class QueryFilter(var queryString: String = "", var queryDateAfter: String = "",
+                           var projectFilter: Boolean = true)
+
     fun createQueryString(
         branch: String = "",
         project: String = "",
         status: Status = Status.Merged,
-        message: String = ""
+        message: String = "",
+        after: String = ""
     ): String {
         val q = mutableListOf<String>()
         if (branch.isNotEmpty()) {
@@ -38,6 +50,9 @@ object ChangeFilter {
         }
         if (message.isNotEmpty()) {
             q.add("message:$message")
+        }
+        if (after.isNotEmpty()) {
+            q.add("after:$after")
         }
         when (status) {
             Status.Merged -> q.add("status:merged")

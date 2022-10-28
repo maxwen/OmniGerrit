@@ -1,19 +1,18 @@
 package org.omnirom.omnigerrit.model
 
-import android.content.Context
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.preferencesDataStore
+import androidx.compose.material.BottomSheetState
+import androidx.compose.material.BottomSheetValue
+import androidx.compose.material.ExperimentalMaterialApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.omnirom.omnigerrit.retrofit.GerritApi
 import org.omnirom.omnigerrit.utils.BuildImageUtils
@@ -22,6 +21,7 @@ import org.omnirom.omnigerrit.utils.NetworkUtils
 import org.omnirom.omniota.model.ConnectivityObserver
 import org.omnirom.omniota.model.RetrofitManager
 
+@OptIn(ExperimentalMaterialApi::class)
 class MainViewModel() : ViewModel() {
     val TAG = "MainViewModel"
 
@@ -45,14 +45,20 @@ class MainViewModel() : ViewModel() {
         MutableStateFlow(initialIsConnected == ConnectivityObserver.Status.Available)
     val isConnected = _isConnected.asStateFlow()
 
-    private val _queryString = MutableStateFlow<String>("")
-    val queryString = _queryString.asStateFlow()
-
-    private val _projectFilter = MutableStateFlow<Boolean>(false)
-    val projectFilter = _projectFilter.asStateFlow()
+    val queryString = MutableStateFlow<String>("")
+    val queryDateAfter = MutableStateFlow<String>("")
+    val projectFilter = MutableStateFlow<Boolean>(false)
 
     private var _snackbarShow = MutableSharedFlow<String>()
     val snackbarShow = _snackbarShow.asSharedFlow()
+
+    val queryFilter = combine(
+        queryString,
+        queryDateAfter,
+        projectFilter
+    ) { queryString, queryDateAfter, projectFilter ->
+        ChangeFilter.QueryFilter(queryString, queryDateAfter, projectFilter)
+    }.stateIn(CoroutineScope(Dispatchers.Default), SharingStarted.WhileSubscribed(), ChangeFilter.QueryFilter())
 
     init {
         viewModelScope.launch {
@@ -81,7 +87,7 @@ class MainViewModel() : ViewModel() {
     fun reload() {
         LogUtils.d(TAG, "reload")
         initDeviceBuilds()
-        _changeDetail.value = null
+        //_changeDetail.value = null
         viewModelScope.launch {
             triggerReload.emit(true)
         }
@@ -89,24 +95,24 @@ class MainViewModel() : ViewModel() {
 
     fun loadChange(change: Change) {
         viewModelScope.launch {
-            // TODO
             //_changeDetail.value = null
-            val changes = gerritApi.getChanges(params = change.id, options = listOf("CURRENT_REVISION", "DETAILED_ACCOUNTS"))
+            val changes = gerritApi.getChanges(
+                params = change.id,
+                options = listOf("CURRENT_REVISION", "DETAILED_ACCOUNTS")
+            )
             if (changes.isSuccessful && changes.body() != null) {
                 val changeList = changes.body()!!
                 if (changeList.size == 1) {
                     val changeDetail = changeList.first()
                     val commit = gerritApi.getCommit(changeDetail.id, changeDetail.current_revision)
                     if (commit.isSuccessful && commit.body() != null) {
-                        val commit = commit.body()
-                        changeDetail.commit = commit
+                        changeDetail.commit = commit.body()
                     }
                     _changeDetail.value = changeDetail
                     LogUtils.d(TAG, "changeDetail = " + this@MainViewModel.changeDetail.value)
                     return@launch
                 }
             }
-            _changeDetail.value = null
         }
     }
 
@@ -123,16 +129,16 @@ class MainViewModel() : ViewModel() {
         }
     }
 
-    fun setQueryString(q : String) {
-        _queryString.value = q
+    fun setQueryString(q: String) {
+        queryString.value = q
+    }
+
+    fun setQueryDateAfter(date: String) {
+        queryDateAfter.value = date
     }
 
     fun toggleProjectFilter() {
-        _projectFilter.value = !_projectFilter.value
-        _changeDetail.value = null
-        viewModelScope.launch {
-            triggerReload.emit(true)
-        }
+        projectFilter.value = !projectFilter.value
     }
 
     fun showSnackbarMessage(message: String) {
