@@ -69,6 +69,7 @@ import org.omnirom.omnigerrit.model.ChangeFilter
 import org.omnirom.omnigerrit.model.MainViewModel
 import org.omnirom.omnigerrit.ui.theme.OmniGerritTheme
 import org.omnirom.omnigerrit.ui.theme.isTablet
+import org.omnirom.omnigerrit.utils.BuildImageUtils
 import org.omnirom.omniota.model.RetrofitManager
 import java.lang.Math.max
 import java.text.DateFormat
@@ -143,6 +144,7 @@ class MainActivity : ComponentActivity() {
                 val projectFilter = viewModel.projectFilter.collectAsState()
                 var queryDateAfterExpanded by remember { mutableStateOf(false) }
                 val queryDateAfter = viewModel.queryDateAfter.collectAsState()
+                var projectFilterExpanded by remember { mutableStateOf(false) }
 
                 val coroutineScope = rememberCoroutineScope()
 
@@ -177,19 +179,47 @@ class MainActivity : ComponentActivity() {
                                 actions = {
                                     IconButton(
                                         onClick = {
-                                            viewModel.toggleProjectFilter()
-                                            // TODO - hide bottomsheet on refresh?
-                                            /*coroutineScope.launch {
-                                                updateBottomSheetState(
-                                                    BottomSheetValue.Collapsed
-                                                )
-                                            }*/
+                                            projectFilterExpanded = true
                                         }
                                     ) {
                                         Icon(
-                                            painter = painterResource(id = if (projectFilter.value) R.drawable.ic_filter_off else R.drawable.ic_filter),
+                                            painter = painterResource(id = R.drawable.ic_devices),
                                             contentDescription = "",
                                         )
+                                    }
+                                    DropdownMenu(
+                                        expanded = projectFilterExpanded,
+                                        onDismissRequest = { projectFilterExpanded = false },
+                                        modifier = Modifier.background(MaterialTheme.colorScheme.background)
+                                    ) {
+                                        DropdownMenuItem(
+                                            onClick = {
+                                                viewModel.setProjectFilter(false)
+                                                projectFilterExpanded = false
+                                            }, leadingIcon = {
+                                                Icon(
+                                                    painter = painterResource(id = R.drawable.ic_filter_off),
+                                                    contentDescription = "",
+                                                )
+                                            }, text = {
+                                                Text(
+                                                    text = "Disable",
+                                                )
+                                            })
+                                        DropdownMenuItem(
+                                            onClick = {
+                                                viewModel.setProjectFilter(true)
+                                                projectFilterExpanded = false
+                                            }, leadingIcon = {
+                                                Icon(
+                                                    painter = painterResource(id = R.drawable.ic_devices),
+                                                    contentDescription = "",
+                                                )
+                                            }, text = {
+                                                Text(
+                                                    text = if (projectFilter.value) "Show " + BuildImageUtils.device else "Show all"
+                                                )
+                                            })
                                     }
                                     IconButton(
                                         onClick = {
@@ -237,7 +267,7 @@ class MainActivity : ComponentActivity() {
                                                 )
                                             }, text = {
                                                 Text(
-                                                    text = "Since" + if (queryDateAfter.value.isNotEmpty()) " - " + queryDateAfter.value else "",
+                                                    text = if (queryDateAfter.value.isNotEmpty()) "Since " + queryDateAfter.value else "Show all",
                                                 )
                                             })
                                     }
@@ -330,12 +360,10 @@ class MainActivity : ComponentActivity() {
             val buildsMapLoaded = viewModel.buildsMapLoaded.collectAsState()
 
             if (connected.value) {
-                var lastChange: Change? = null
                 LazyColumn(modifier = Modifier.padding(top = 4.dp), state = changesListState) {
                     itemsIndexed(items = changesPager!!) { index, change ->
                         val changeTime = change!!.updatedInMillis
-                        ChangeItem(index, change, changeTime, lastChange)
-                        lastChange = change
+                        ChangeItem(index, change, changeTime)
                     }
                     when {
                         changesPager!!.loadState.refresh is LoadState.Loading -> {
@@ -371,8 +399,7 @@ class MainActivity : ComponentActivity() {
     fun ChangeItem(
         index: Int,
         change: Change,
-        changeTime: Long,
-        lastChange: Change?
+        changeTime: Long
     ) {
         val selected =
             changeDetail.value != null && changeDetail.value!!.id == change.id
@@ -385,16 +412,11 @@ class MainActivity : ComponentActivity() {
         }
 
         val date = localDateTimeFormat.format(changeTime)
-        var newDay = false
-        /*if (lastChange != null) {
-            if (localDateFormat.format(lastChange.updatedInMillis) != localDateFormat.format(change.updatedInMillis)) {
-                newDay = true
-            }
-        }*/
         Row(
             modifier = Modifier
-                .background(bgColor)
-                .padding(top = if (newDay) 16.dp else 4.dp, bottom = 4.dp)
+                .background(bgColor, shape = RoundedCornerShape(size = 4.dp))
+                .height(80.dp)
+                .padding(start = 4.dp, end = 4.dp)
                 .combinedClickable(onClick = {
                     if (change.id.isNotEmpty()) {
                         coroutineScope.launch {
@@ -416,31 +438,39 @@ class MainActivity : ComponentActivity() {
                 }, onLongClick = {
                     if (change._number.isNotEmpty()) {
                         showChangeInGerrit(change._number)
+                    } else {
+                        showOtaBuildDirInBrowser()
                     }
                 }),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(
-                    text = change.subject,
-                    modifier = Modifier.fillMaxWidth(),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Text(
-                    text = date + " " + change.owner.name,
-                    modifier = Modifier.fillMaxWidth(),
-                    maxLines = 1,
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Text(
-                    text = change.project,
-                    modifier = Modifier.fillMaxWidth(),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodySmall
-                )
+            Column() {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = change.subject,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f, true),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                }
+                if (change.id.isNotEmpty()) {
+                    Text(
+                        text = date + " " + change.owner.name,
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 1,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        text = change.project,
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
         }
     }
@@ -744,6 +774,14 @@ class MainActivity : ComponentActivity() {
     private fun showChangeInGerrit(number: String) {
         val uri = Uri.parse(
             RetrofitManager.gerritBaseUrl + "#/c/" + number
+        )
+        val intent = Intent(Intent.ACTION_VIEW, uri)
+        startActivity(intent)
+    }
+
+    private fun showOtaBuildDirInBrowser() {
+        val uri = Uri.parse(
+            RetrofitManager.otaBaseUrl + (if (RetrofitManager.deviceRootDir!!.isNotEmpty()) RetrofitManager.deviceRootDir!! + "/" else "") + BuildImageUtils.device
         )
         val intent = Intent(Intent.ACTION_VIEW, uri)
         startActivity(intent)

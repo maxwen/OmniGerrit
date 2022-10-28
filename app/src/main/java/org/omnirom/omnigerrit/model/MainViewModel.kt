@@ -47,7 +47,7 @@ class MainViewModel() : ViewModel() {
     // TODO - save in settings
     val queryString = MutableStateFlow<String>("")
     val queryDateAfter = MutableStateFlow<String>("")
-    val projectFilter = MutableStateFlow<Boolean>(false)
+    val projectFilter = MutableStateFlow<Boolean>(true)
 
     private var _snackbarShow = MutableSharedFlow<String>()
     val snackbarShow = _snackbarShow.asSharedFlow()
@@ -61,6 +61,10 @@ class MainViewModel() : ViewModel() {
     }.stateIn(CoroutineScope(Dispatchers.Default), SharingStarted.WhileSubscribed(), ChangeFilter.QueryFilter())
 
     init {
+        viewModelScope.launch {
+            projectFilter.value = Settings.isProjectFilter()
+            queryDateAfter.value = Settings.getDateAfter()
+        }
         viewModelScope.launch {
             NetworkUtils.connectivityObserver.observe().collectLatest { status ->
                 val connected = status == ConnectivityObserver.Status.Available
@@ -143,10 +147,16 @@ class MainViewModel() : ViewModel() {
 
     fun setQueryDateAfter(date: String) {
         queryDateAfter.value = date
+        viewModelScope.launch {
+            Settings.setDateAfter(date)
+        }
     }
 
-    fun toggleProjectFilter() {
-        projectFilter.value = !projectFilter.value
+    fun setProjectFilter(value: Boolean) {
+        projectFilter.value = value
+        viewModelScope.launch {
+            Settings.setProjectFilter(value)
+        }
     }
 
     fun showSnackbarMessage(message: String) {

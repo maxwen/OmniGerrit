@@ -4,10 +4,7 @@ import android.content.Context
 import androidx.compose.material.BottomSheetValue
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.first
 
@@ -16,17 +13,30 @@ object Settings {
 
     lateinit var myDataStore: DataStore<Preferences>
     const val SETTINGS_STORE_NAME = "user_preferences"
-    val DETAILS_HINT_SHOWN = booleanPreferencesKey("details_hint_shown")
+    val PROJECT_FILTER = booleanPreferencesKey("project_filter")
+    val DATE_AFTER = stringPreferencesKey("date_after")
 
-    suspend fun setDetailsHintShown(value: Boolean) {
+    suspend fun setProjectFilter(value: Boolean) {
         val res = Result.runCatching {
             myDataStore.edit { settings ->
-                settings[DETAILS_HINT_SHOWN] = value
+                settings[PROJECT_FILTER] = value
             }
         }
     }
-    suspend fun isDetailsHintShown() : Boolean {
+    suspend fun isProjectFilter() : Boolean {
         val settings = myDataStore.data.first().toPreferences()
-        return settings[DETAILS_HINT_SHOWN] ?: false
+        return settings[PROJECT_FILTER] ?: true
+    }
+
+    suspend fun setDateAfter(dateAfter: String) {
+        val res = Result.runCatching {
+            myDataStore.edit { settings ->
+                settings[DATE_AFTER] = dateAfter
+            }
+        }
+    }
+    suspend fun getDateAfter() : String {
+        val settings = myDataStore.data.first().toPreferences()
+        return settings[DATE_AFTER] ?: ""
     }
 }
