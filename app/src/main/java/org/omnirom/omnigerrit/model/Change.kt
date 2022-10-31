@@ -30,7 +30,7 @@ data class Change(
     val owner: Owner = Owner("", -1)
 ) {
     constructor(buildImage: BuildImage) : this(
-        subject = buildImage.filename,
+        subject = "Build: " + buildImage.filename,
         updated = ChangeFilter.gerritDateTimeFormat.format(buildImage.getBuildDateInMillis())
     )
 

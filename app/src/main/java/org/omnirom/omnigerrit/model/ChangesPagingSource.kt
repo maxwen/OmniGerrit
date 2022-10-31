@@ -74,12 +74,11 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
     }
 
     private suspend fun fillResultList(queryResultList: MutableList<Change>) {
+        val queryFilter = viewModel.getQueryFilter()
+        LogUtils.d(TAG, "queryFilter = $queryFilter")
         while (queryResultList.size < PAGE_SIZE) {
             val changes = viewModel.gerritApi.getChanges(
-                ChangeFilter.createQueryString(
-                    message = viewModel.queryString.value,
-                    after = viewModel.queryDateAfter.value
-                ),
+                ChangeFilter.createQueryString(queryFilter),
                 options = listOf("DETAILED_ACCOUNTS"),
                 limit = GERRIT_QUERY_LIMIT.toString(),
                 offset = offset.toString()
@@ -89,7 +88,7 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
                 if (changeList.isEmpty()) {
                     break
                 } else {
-                    if (viewModel.projectFilter.value) {
+                    if (queryFilter.projectFilter) {
                         queryResultList.addAll(changeList.filter { ChangeFilter.showProject(it.project) })
                     } else {
                         queryResultList.addAll(changeList)

@@ -15,6 +15,7 @@ object Settings {
     const val SETTINGS_STORE_NAME = "user_preferences"
     val PROJECT_FILTER = booleanPreferencesKey("project_filter")
     val DATE_AFTER = stringPreferencesKey("date_after")
+    val BRANCH = stringPreferencesKey("branch")
 
     suspend fun setProjectFilter(value: Boolean) {
         val res = Result.runCatching {
@@ -23,9 +24,9 @@ object Settings {
             }
         }
     }
-    suspend fun isProjectFilter() : Boolean {
+    suspend fun isProjectFilter(default : Boolean) : Boolean {
         val settings = myDataStore.data.first().toPreferences()
-        return settings[PROJECT_FILTER] ?: true
+        return settings[PROJECT_FILTER] ?: default
     }
 
     suspend fun setDateAfter(dateAfter: String) {
@@ -35,8 +36,20 @@ object Settings {
             }
         }
     }
-    suspend fun getDateAfter() : String {
+    suspend fun getDateAfter(default: String) : String {
         val settings = myDataStore.data.first().toPreferences()
-        return settings[DATE_AFTER] ?: ""
+        return settings[DATE_AFTER] ?: default
+    }
+
+    suspend fun setBranch(branch: String) {
+        val res = Result.runCatching {
+            myDataStore.edit { settings ->
+                settings[BRANCH] = branch
+            }
+        }
+    }
+    suspend fun getBranch(default: String) : String {
+        val settings = myDataStore.data.first().toPreferences()
+        return settings[BRANCH] ?: default
     }
 }

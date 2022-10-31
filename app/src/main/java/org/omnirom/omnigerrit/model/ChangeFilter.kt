@@ -48,32 +48,29 @@ object ChangeFilter {
 
     data class QueryFilter(
         var queryString: String = "", var queryDateAfter: String = "",
-        var projectFilter: Boolean = true
+        var projectFilter: Boolean = true, var queryBranch: String = "",
+        var queryProject: String = "", var queryStatus: Status = Status.Merged
     )
 
     fun createQueryString(
-        branch: String = "",
-        project: String = "",
-        status: Status = Status.Merged,
-        message: String = "",
-        after: String = ""
+        queryFilter: QueryFilter
     ): String {
         val q = mutableListOf<String>()
-        if (branch.isNotEmpty()) {
-            q.add("branch:$branch")
+        if (queryFilter.queryBranch.isNotEmpty()) {
+            q.add("branch:" + queryFilter.queryBranch)
         } else {
             q.add("branch:$defaultBranch")
         }
-        if (project.isNotEmpty()) {
-            q.add("project:$project")
+        if (queryFilter.queryProject.isNotEmpty()) {
+            q.add("project:" + queryFilter.queryProject)
         }
-        if (message.isNotEmpty()) {
-            q.add("message:$message")
+        if (queryFilter.queryString.isNotEmpty()) {
+            q.add("message:" + queryFilter.queryString)
         }
-        if (after.isNotEmpty()) {
-            q.add("after:$after")
+        if (queryFilter.queryDateAfter.isNotEmpty()) {
+            q.add("after:" + queryFilter.queryDateAfter)
         }
-        when (status) {
+        when (queryFilter.queryStatus) {
             Status.Merged -> q.add("status:merged")
             Status.Open -> q.add("status:open")
         }
@@ -81,7 +78,11 @@ object ChangeFilter {
     }
 
     fun showProject(project: String): Boolean {
-        return thisDeviceProjectList.contains(project) || hideProjectList.none() { project.startsWith(it) }
+        return thisDeviceProjectList.contains(project) || hideProjectList.none() {
+            project.startsWith(
+                it
+            )
+        }
     }
 
     private fun getOkHttpClient(): OkHttpClient {
@@ -171,5 +172,9 @@ object ChangeFilter {
             }
         }
         LogUtils.d(TAG, "thisDeviceProjectList = " + thisDeviceProjectList)
+    }
+
+    fun hasDeviceConfig(): Boolean {
+        return deviceProjectMap.containsKey(BuildImageUtils.device)
     }
 }

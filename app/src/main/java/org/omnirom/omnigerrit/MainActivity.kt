@@ -19,9 +19,12 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Done
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -71,7 +74,6 @@ import org.omnirom.omnigerrit.ui.theme.OmniGerritTheme
 import org.omnirom.omnigerrit.ui.theme.isTablet
 import org.omnirom.omnigerrit.utils.BuildImageUtils
 import org.omnirom.omniota.model.RetrofitManager
-import java.lang.Math.max
 import java.text.DateFormat
 import java.util.*
 
@@ -146,8 +148,6 @@ class MainActivity : ComponentActivity() {
                 val queryDateAfter = viewModel.queryDateAfter.collectAsState()
                 var projectFilterExpanded by remember { mutableStateOf(false) }
 
-                val coroutineScope = rememberCoroutineScope()
-
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -161,7 +161,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                 },
                                 actions = {
-                                    IconButton(
+                                    /*IconButton(
                                         onClick = {
                                             viewModel.showSnackbarMessage("Nothing to see here yet")
                                         }
@@ -170,7 +170,7 @@ class MainActivity : ComponentActivity() {
                                             painter = painterResource(id = R.drawable.ic_settings),
                                             contentDescription = "",
                                         )
-                                    }
+                                    }*/
                                 },
                             )
                         },
@@ -182,34 +182,56 @@ class MainActivity : ComponentActivity() {
                                             projectFilterExpanded = true
                                         }
                                     ) {
-                                        Icon(
-                                            painter = painterResource(id = R.drawable.ic_devices),
-                                            contentDescription = "",
-                                        )
+                                        if (projectFilter.value) {
+                                            BadgedBox(
+                                                badge = {
+                                                    Badge(containerColor = MaterialTheme.colorScheme.primary) {
+                                                        Icon(
+                                                            Icons.Outlined.Done,
+                                                            contentDescription = "",
+                                                            tint = MaterialTheme.colorScheme.onPrimary,
+                                                            modifier = Modifier.size(8.dp)
+                                                        )
+                                                    }
+                                                },
+                                            ) {
+                                                Icon(
+                                                    painterResource(id = R.drawable.ic_devices),
+                                                    contentDescription = ""
+                                                )
+                                            }
+                                        } else {
+                                            Icon(
+                                                painter = painterResource(id = R.drawable.ic_devices),
+                                                contentDescription = "",
+                                            )
+                                        }
                                     }
                                     DropdownMenu(
                                         expanded = projectFilterExpanded,
                                         onDismissRequest = { projectFilterExpanded = false },
                                         modifier = Modifier.background(MaterialTheme.colorScheme.background)
                                     ) {
+                                        if (projectFilter.value) {
+                                            DropdownMenuItem(
+                                                onClick = {
+                                                    projectFilterExpanded = false
+                                                    viewModel.setProjectFilter(false)
+                                                }, leadingIcon = {
+                                                    Icon(
+                                                        painter = painterResource(id = R.drawable.ic_filter_off),
+                                                        contentDescription = "",
+                                                    )
+                                                }, text = {
+                                                    Text(
+                                                        text = "Show all",
+                                                    )
+                                                })
+                                        }
                                         DropdownMenuItem(
                                             onClick = {
-                                                viewModel.setProjectFilter(false)
                                                 projectFilterExpanded = false
-                                            }, leadingIcon = {
-                                                Icon(
-                                                    painter = painterResource(id = R.drawable.ic_filter_off),
-                                                    contentDescription = "",
-                                                )
-                                            }, text = {
-                                                Text(
-                                                    text = "Disable",
-                                                )
-                                            })
-                                        DropdownMenuItem(
-                                            onClick = {
                                                 viewModel.setProjectFilter(true)
-                                                projectFilterExpanded = false
                                             }, leadingIcon = {
                                                 Icon(
                                                     painter = painterResource(id = R.drawable.ic_devices),
@@ -217,7 +239,7 @@ class MainActivity : ComponentActivity() {
                                                 )
                                             }, text = {
                                                 Text(
-                                                    text = if (projectFilter.value) "Show " + BuildImageUtils.device else "Show all"
+                                                    text = BuildImageUtils.device
                                                 )
                                             })
                                     }
@@ -226,40 +248,54 @@ class MainActivity : ComponentActivity() {
                                             queryDateAfterExpanded = true
                                         }
                                     ) {
-                                        Icon(
-                                            painter = painterResource(id = R.drawable.show_since),
-                                            contentDescription = "",
-                                        )
+                                        if (queryDateAfter.value.isNotEmpty()) {
+                                            BadgedBox(badge = {
+                                                Badge(containerColor = MaterialTheme.colorScheme.primary) {
+                                                    Icon(
+                                                        Icons.Outlined.Done,
+                                                        contentDescription = "",
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(8.dp)
+                                                    )
+                                                }
+                                            }) {
+                                                Icon(
+                                                    painterResource(id = R.drawable.show_since),
+                                                    contentDescription = ""
+                                                )
+                                            }
+                                        } else {
+                                            Icon(
+                                                painter = painterResource(id = R.drawable.show_since),
+                                                contentDescription = "",
+                                            )
+                                        }
                                     }
                                     DropdownMenu(
                                         expanded = queryDateAfterExpanded,
                                         onDismissRequest = { queryDateAfterExpanded = false },
                                         modifier = Modifier.background(MaterialTheme.colorScheme.background)
                                     ) {
-                                        DropdownMenuItem(
-                                            onClick = {
-                                                viewModel.setQueryDateAfter("")
-                                                // TODO - hide bottomsheet on refresh?
-                                                /*coroutineScope.launch {
-                                                    updateBottomSheetState(
-                                                        BottomSheetValue.Collapsed
+                                        if (queryDateAfter.value.isNotEmpty()) {
+                                            DropdownMenuItem(
+                                                onClick = {
+                                                    queryDateAfterExpanded = false
+                                                    viewModel.setQueryDateAfter("")
+                                                }, leadingIcon = {
+                                                    Icon(
+                                                        painter = painterResource(id = R.drawable.ic_filter_off),
+                                                        contentDescription = "",
                                                     )
-                                                }*/
-                                                queryDateAfterExpanded = false
-                                            }, leadingIcon = {
-                                                Icon(
-                                                    painter = painterResource(id = R.drawable.ic_filter_off),
-                                                    contentDescription = "",
-                                                )
-                                            }, text = {
-                                                Text(
-                                                    text = "Disable",
-                                                )
-                                            })
+                                                }, text = {
+                                                    Text(
+                                                        text = "Show all",
+                                                    )
+                                                })
+                                        }
                                         DropdownMenuItem(
                                             onClick = {
-                                                doSelectStartTime()
                                                 queryDateAfterExpanded = false
+                                                doSelectStartTime()
                                             }, leadingIcon = {
                                                 Icon(
                                                     painter = painterResource(id = R.drawable.show_since),
@@ -267,7 +303,7 @@ class MainActivity : ComponentActivity() {
                                                 )
                                             }, text = {
                                                 Text(
-                                                    text = if (queryDateAfter.value.isNotEmpty()) "Since " + queryDateAfter.value else "Show all",
+                                                    text = "Since " + queryDateAfter.value,
                                                 )
                                             })
                                     }
@@ -283,10 +319,11 @@ class MainActivity : ComponentActivity() {
                                                 )
                                             }*/
                                         }
-                                    }) {
+                                    }, containerColor = MaterialTheme.colorScheme.primary) {
                                         Icon(
                                             Icons.Outlined.Refresh,
                                             contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onPrimary
                                         )
                                     }
                                 })
@@ -404,7 +441,9 @@ class MainActivity : ComponentActivity() {
         val selected =
             changeDetail.value != null && changeDetail.value!!.id == change.id
         val coroutineScope = rememberCoroutineScope()
-        var bgColor = MaterialTheme.colorScheme.background
+        var bgColor = MaterialTheme.colorScheme.surfaceColorAtElevation(
+            5.dp
+        )
         if (selected) {
             bgColor = MaterialTheme.colorScheme.secondaryContainer
         } else if (change.id.isEmpty()) {
@@ -414,9 +453,10 @@ class MainActivity : ComponentActivity() {
         val date = localDateTimeFormat.format(changeTime)
         Row(
             modifier = Modifier
+                .padding(top = 4.dp, bottom = 4.dp)
                 .background(bgColor, shape = RoundedCornerShape(size = 4.dp))
-                .height(80.dp)
-                .padding(start = 4.dp, end = 4.dp)
+                .heightIn(min = 80.dp)
+                .padding(start = 10.dp, end = 10.dp)
                 .combinedClickable(onClick = {
                     if (change.id.isNotEmpty()) {
                         coroutineScope.launch {
@@ -425,8 +465,10 @@ class MainActivity : ComponentActivity() {
                                 if (isLandscapeSpacing()) {
                                     changesListState.animateScrollToItem(0)
                                 } else {
-                                    if (index - changesListState.firstVisibleItemIndex > 5) {
-                                        changesListState.animateScrollToItem(max(0, index - 5))
+                                    val vsisibleItems =
+                                        changesListState.layoutInfo.viewportSize.height / changesListState.layoutInfo.visibleItemsInfo[0].size
+                                    if (index - changesListState.firstVisibleItemIndex > vsisibleItems / 2) {
+                                        changesListState.animateScrollToItem(0.coerceAtLeast(index - vsisibleItems / 2))
                                     }
                                 }
                             }
@@ -436,6 +478,7 @@ class MainActivity : ComponentActivity() {
                         viewModel.loadChange(change)
                     }
                 }, onLongClick = {
+                    // TODO - mybe better menu
                     if (change._number.isNotEmpty()) {
                         showChangeInGerrit(change._number)
                     } else {
@@ -451,14 +494,14 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f, true),
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleSmall,
                     )
                 }
                 if (change.id.isNotEmpty()) {
                     Text(
-                        text = date + " " + change.owner.name,
+                        text = date + " by " + change.owner.name,
                         modifier = Modifier.fillMaxWidth(),
                         maxLines = 1,
                         style = MaterialTheme.typography.bodySmall
@@ -754,10 +797,11 @@ class MainActivity : ComponentActivity() {
                                         Icon(
                                             painterResource(id = R.drawable.ic_web),
                                             contentDescription = null,
-                                            tint = Color.White,
+                                            tint = MaterialTheme.colorScheme.onPrimary,
                                         )
                                         Text(
-                                            text = "Show", color = Color.White,
+                                            text = "Show",
+                                            color = MaterialTheme.colorScheme.onPrimary,
                                             modifier = Modifier
                                                 .padding(start = 14.dp),
                                         )

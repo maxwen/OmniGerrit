@@ -1,7 +1,5 @@
 package org.omnirom.omnigerrit.model
 
-import androidx.compose.material.BottomSheetState
-import androidx.compose.material.BottomSheetValue
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -44,26 +42,27 @@ class MainViewModel() : ViewModel() {
         MutableStateFlow(initialIsConnected == ConnectivityObserver.Status.Available)
     val isConnected = _isConnected.asStateFlow()
 
-    // TODO - save in settings
     val queryString = MutableStateFlow<String>("")
     val queryDateAfter = MutableStateFlow<String>("")
     val projectFilter = MutableStateFlow<Boolean>(true)
+    val queryBranch = MutableStateFlow<String>("")
 
-    private var _snackbarShow = MutableSharedFlow<String>()
-    val snackbarShow = _snackbarShow.asSharedFlow()
+    val snackbarShow = MutableSharedFlow<String>()
 
     val queryFilter = combine(
         queryString,
         queryDateAfter,
-        projectFilter
-    ) { queryString, queryDateAfter, projectFilter ->
-        ChangeFilter.QueryFilter(queryString, queryDateAfter, projectFilter)
+        projectFilter,
+        queryBranch
+    ) { queryString, queryDateAfter, projectFilter, queryBranch ->
+        ChangeFilter.QueryFilter(queryString, queryDateAfter, projectFilter, queryBranch)
     }.stateIn(CoroutineScope(Dispatchers.Default), SharingStarted.WhileSubscribed(), ChangeFilter.QueryFilter())
 
     init {
         viewModelScope.launch {
-            projectFilter.value = Settings.isProjectFilter()
-            queryDateAfter.value = Settings.getDateAfter()
+            projectFilter.value = Settings.isProjectFilter(true)
+            queryDateAfter.value = Settings.getDateAfter("")
+            queryBranch.value = Settings.getBranch(ChangeFilter.defaultBranch)
         }
         viewModelScope.launch {
             NetworkUtils.connectivityObserver.observe().collectLatest { status ->
@@ -79,6 +78,9 @@ class MainViewModel() : ViewModel() {
             withContext(Dispatchers.IO) {
                 initDeviceBuildSync()
                 ChangeFilter.loadProjectFilterConfigFile()
+                if (!ChangeFilter.hasDeviceConfig()) {
+                    snackbarShow.emit("No device config for " + BuildImageUtils.device)
+                }
                 triggerReload.emit(true)
             }
         }
@@ -159,9 +161,22 @@ class MainViewModel() : ViewModel() {
         }
     }
 
+    fun setBranch(value: String) {
+        queryBranch.value = value
+        viewModelScope.launch {
+            Settings.setBranch(value)
+        }
+    }
+
     fun showSnackbarMessage(message: String) {
         viewModelScope.launch {
-            _snackbarShow.emit(message)
+            snackbarShow.emit(message)
         }
+    }
+
+    fun getQueryFilter() : ChangeFilter.QueryFilter {
+        return ChangeFilter.QueryFilter(queryString.value, queryDateAfter.value,
+            projectFilter.value,
+            queryBranch.value, queryProject = "")
     }
 }
