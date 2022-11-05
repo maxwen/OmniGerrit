@@ -19,6 +19,8 @@ package org.omnirom.omnigerrit.model
 
 import android.content.Context
 import org.omnirom.omnigerrit.utils.DeviceUtils
+import java.text.SimpleDateFormat
+import java.util.*
 
 object Device {
     fun getDevice(context: Context): String = DeviceUtils.getProperty(context, "ro.omni.device")
@@ -47,6 +49,16 @@ object Device {
         } catch (e: Exception) {
             return ""
         }
+    }
+
+    fun getBuildDateInMillis(context: Context) : Long {
+        val otaDateFormat  = SimpleDateFormat("yyyyMMdd")
+        otaDateFormat.timeZone = TimeZone.getTimeZone("UTC")
+        val buildDate = getBuildDate(context)
+        if (buildDate.isNotEmpty()) {
+            return otaDateFormat.parse(buildDate).time
+        }
+        return 0
     }
 
     fun getBranch(context: Context): String = DeviceUtils.getProperty(context, "ro.omni.branch", "android-13.0")

@@ -23,12 +23,10 @@ import androidx.compose.material.icons.outlined.Done
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
-import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -39,20 +37,17 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,6 +64,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.omnirom.omnigerrit.model.Change
 import org.omnirom.omnigerrit.model.ChangeFilter
+import org.omnirom.omnigerrit.model.Device
 import org.omnirom.omnigerrit.model.MainViewModel
 import org.omnirom.omnigerrit.ui.theme.OmniGerritTheme
 import org.omnirom.omnigerrit.ui.theme.isTablet
@@ -134,10 +130,10 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             OmniGerritTheme {
-                val bottomSheetValue = rememberSaveable { bottomSheetValue }
+                val bottomSheetValue by rememberSaveable { bottomSheetValue }
 
                 bottomSheetScaffoldState = rememberBottomSheetScaffoldState(
-                    bottomSheetState = BottomSheetState(initialValue = bottomSheetValue.value)
+                    bottomSheetState = BottomSheetState(initialValue = bottomSheetValue)
                 )
                 changeDetail = viewModel.changeDetail.collectAsState()
                 changesPager = viewModel.changesPager.collectAsLazyPagingItems()
@@ -153,7 +149,7 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     Scaffold(
-                        topBar = {
+                        /*topBar = {
                             TopAppBar(
                                 title = {
                                     Text(
@@ -161,7 +157,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                 },
                                 actions = {
-                                    /*IconButton(
+                                    IconButton(
                                         onClick = {
                                             viewModel.showSnackbarMessage("Nothing to see here yet")
                                         }
@@ -170,10 +166,10 @@ class MainActivity : ComponentActivity() {
                                             painter = painterResource(id = R.drawable.ic_settings),
                                             contentDescription = "",
                                         )
-                                    }*/
+                                    }
                                 },
                             )
-                        },
+                        },*/
                         bottomBar = {
                             BottomAppBar(
                                 actions = {
@@ -254,7 +250,7 @@ class MainActivity : ComponentActivity() {
                                                     Icon(
                                                         Icons.Outlined.Done,
                                                         contentDescription = "",
-                                                        tint = Color.White,
+                                                        tint = MaterialTheme.colorScheme.onPrimary,
                                                         modifier = Modifier.size(8.dp)
                                                     )
                                                 }
@@ -289,6 +285,32 @@ class MainActivity : ComponentActivity() {
                                                 }, text = {
                                                     Text(
                                                         text = "Show all",
+                                                    )
+                                                })
+                                        }
+                                        if (Device.getBuildDateInMillis(applicationContext) != 0L) {
+                                            DropdownMenuItem(
+                                                onClick = {
+                                                    queryDateAfterExpanded = false
+                                                    viewModel.setQueryDateAfter(
+                                                        ChangeFilter.gerritDateFormat.format(
+                                                            Device.getBuildDateInMillis(
+                                                                applicationContext
+                                                            )
+                                                        )
+                                                    )
+                                                }, leadingIcon = {
+                                                    Icon(
+                                                        painter = painterResource(id = R.drawable.show_since),
+                                                        contentDescription = "",
+                                                    )
+                                                }, text = {
+                                                    Text(
+                                                        text = "Since this build " + ChangeFilter.gerritDateFormat.format(
+                                                            Device.getBuildDateInMillis(
+                                                                applicationContext
+                                                            )
+                                                        ),
                                                     )
                                                 })
                                         }
@@ -353,6 +375,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
+                        //DateSelectDialog()
                     }
                 }
             }
@@ -363,7 +386,7 @@ class MainActivity : ComponentActivity() {
     fun Changes() {
         val queryString = viewModel.queryString.collectAsState()
 
-        Column(modifier = Modifier.padding(start = 14.dp, end = 14.dp)) {
+        Column(modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 14.dp)) {
             Row() {
                 OutlinedTextField(
                     value = queryString.value,
@@ -442,7 +465,7 @@ class MainActivity : ComponentActivity() {
             changeDetail.value != null && changeDetail.value!!.id == change.id
         val coroutineScope = rememberCoroutineScope()
         var bgColor = MaterialTheme.colorScheme.surfaceColorAtElevation(
-            5.dp
+            1.dp
         )
         if (selected) {
             bgColor = MaterialTheme.colorScheme.secondaryContainer
@@ -455,7 +478,7 @@ class MainActivity : ComponentActivity() {
             modifier = Modifier
                 .padding(top = 4.dp, bottom = 4.dp)
                 .background(bgColor, shape = RoundedCornerShape(size = 4.dp))
-                .heightIn(min = 80.dp)
+                .heightIn(min = 88.dp)
                 .padding(start = 10.dp, end = 10.dp)
                 .combinedClickable(onClick = {
                     if (change.id.isNotEmpty()) {
@@ -585,12 +608,12 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        val selectedTab = rememberSaveable { mutableStateOf<Int>(0) }
+        var selectedTab by rememberSaveable { mutableStateOf<Int>(0) }
         Column(
             modifier = Modifier
                 .background(
                     color = MaterialTheme.colorScheme.surfaceColorAtElevation(
-                        10.dp
+                        3.dp
                     )
                 )
                 .height(height = if (isLandscapeSpacing()) 140.dp else 220.dp)
@@ -638,15 +661,15 @@ class MainActivity : ComponentActivity() {
                     ) {
                         TabRow(
                             containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(
-                                10.dp
+                                3.dp
                             ),
                             contentColor = MaterialTheme.colorScheme.onSurface,
-                            selectedTabIndex = selectedTab.value,
+                            selectedTabIndex = selectedTab,
                             divider = {},
                             indicator = { tabPositions ->
                                 Box(
                                     Modifier
-                                        .tabIndicatorOffset(tabPositions[selectedTab.value])
+                                        .tabIndicatorOffset(tabPositions[selectedTab])
                                         .padding(5.dp)
                                         .fillMaxSize()
                                         .border(
@@ -666,7 +689,7 @@ class MainActivity : ComponentActivity() {
                                         style = MaterialTheme.typography.titleSmall
                                     )
                                 },
-                                onClick = { selectedTab.value = 0 })
+                                onClick = { selectedTab = 0 })
                             Tab(
                                 selected = false,
                                 text = {
@@ -675,7 +698,7 @@ class MainActivity : ComponentActivity() {
                                         style = MaterialTheme.typography.titleSmall
                                     )
                                 },
-                                onClick = { selectedTab.value = 1 })
+                                onClick = { selectedTab = 1 })
                             Tab(
                                 selected = false,
                                 text = {
@@ -684,9 +707,9 @@ class MainActivity : ComponentActivity() {
                                         style = MaterialTheme.typography.titleSmall
                                     )
                                 },
-                                onClick = { selectedTab.value = 2 })
+                                onClick = { selectedTab = 2 })
                         }
-                        when (selectedTab.value) {
+                        when (selectedTab) {
                             0 -> {
                                 Column(
                                     modifier = Modifier
@@ -848,7 +871,7 @@ class MainActivity : ComponentActivity() {
         val year = c[Calendar.YEAR]
         val month = c[Calendar.MONTH]
         val datePickerDialog = DatePickerDialog(
-            ContextThemeWrapper(this, R.style.Theme_OmniGerrit),
+            ContextThemeWrapper(this, R.style.Theme_OmniGerrit_DatePickerDialog),
             { view, year, monthOfYear, dayOfMonth ->
                 val c = Calendar.getInstance()
                 c.timeZone = TimeZone.getTimeZone("UTC")

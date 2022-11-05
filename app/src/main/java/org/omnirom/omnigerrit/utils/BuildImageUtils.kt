@@ -55,7 +55,7 @@ object BuildImageUtils {
 
     fun getDeviceBuildsMap(builds: List<BuildImage>): Map<Long, BuildImage> {
         val buildsMap = mutableMapOf<Long, BuildImage>()
-        builds.forEach { build -> buildsMap.put(build.getBuildDateInMillis(), build) }
+        builds.forEach { build -> buildsMap[build.getBuildDateInMillis()] = build }
         return buildsMap
     }
 
