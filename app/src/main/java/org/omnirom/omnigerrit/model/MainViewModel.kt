@@ -1,6 +1,7 @@
 package org.omnirom.omnigerrit.model
 
 import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.TextFieldColors
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.Pager
@@ -43,7 +44,7 @@ class MainViewModel() : ViewModel() {
     val isConnected = _isConnected.asStateFlow()
 
     val queryString = MutableStateFlow<String>("")
-    val queryDateAfter = MutableStateFlow<String>("")
+    val queryDateAfter = MutableStateFlow<Long>(0)
     val projectFilter = MutableStateFlow<Boolean>(true)
     val queryBranch = MutableStateFlow<String>("")
 
@@ -61,7 +62,7 @@ class MainViewModel() : ViewModel() {
     init {
         viewModelScope.launch {
             projectFilter.value = Settings.isProjectFilter(true)
-            queryDateAfter.value = Settings.getDateAfter("")
+            queryDateAfter.value = Settings.getDateAfter(0)
             queryBranch.value = Settings.getBranch(ChangeFilter.defaultBranch)
         }
         viewModelScope.launch {
@@ -143,21 +144,21 @@ class MainViewModel() : ViewModel() {
         buildsMapLoaded.value = true
     }
 
-    fun setQueryString(q: String) {
-        queryString.value = q
+    fun setQueryString(text: String) {
+        queryString.value = text
     }
 
-    fun setQueryDateAfter(date: String) {
-        queryDateAfter.value = date
+    fun setQueryDateAfter(dateInMillis: Long) {
+        queryDateAfter.value = dateInMillis
         viewModelScope.launch {
-            Settings.setDateAfter(date)
+            Settings.setDateAfter(dateInMillis)
         }
     }
 
-    fun setProjectFilter(value: Boolean) {
-        projectFilter.value = value
+    fun setProjectFilter(enabled: Boolean) {
+        projectFilter.value = enabled
         viewModelScope.launch {
-            Settings.setProjectFilter(value)
+            Settings.setProjectFilter(enabled)
         }
     }
 

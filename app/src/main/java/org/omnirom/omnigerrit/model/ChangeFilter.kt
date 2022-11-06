@@ -21,8 +21,9 @@ object ChangeFilter {
     val gerritDateTimeFormat by lazy {
         initDateTimeFormat()
     }
-    val gerritDateFormat by lazy {
-        initDateFormat()
+
+    private val gerritQueryDateTimeFormat by lazy {
+        initQueryDateTimeFormat()
     }
     private val hideProjectList = listOf("android_device_", "android_hardware_", "android_kernel_")
 
@@ -36,8 +37,8 @@ object ChangeFilter {
         return format
     }
 
-    private fun initDateFormat(): SimpleDateFormat {
-        val format = SimpleDateFormat("yyyy-MM-dd")
+    private fun initQueryDateTimeFormat(): SimpleDateFormat {
+        val format = SimpleDateFormat("\"yyyy-MM-dd+HH:mm:ss\"")
         format.timeZone = TimeZone.getTimeZone("UTC")
         return format
     }
@@ -47,7 +48,7 @@ object ChangeFilter {
     }
 
     data class QueryFilter(
-        var queryString: String = "", var queryDateAfter: String = "",
+        var queryString: String = "", var queryDateAfter: Long = 0,
         var projectFilter: Boolean = true, var queryBranch: String = "",
         var queryProject: String = "", var queryStatus: Status = Status.Merged
     )
@@ -67,8 +68,8 @@ object ChangeFilter {
         if (queryFilter.queryString.isNotEmpty()) {
             q.add("message:" + queryFilter.queryString)
         }
-        if (queryFilter.queryDateAfter.isNotEmpty()) {
-            q.add("after:" + queryFilter.queryDateAfter)
+        if (queryFilter.queryDateAfter != 0L) {
+            q.add("after:" + gerritQueryDateTimeFormat.format(queryFilter.queryDateAfter))
         }
         when (queryFilter.queryStatus) {
             Status.Merged -> q.add("status:merged")

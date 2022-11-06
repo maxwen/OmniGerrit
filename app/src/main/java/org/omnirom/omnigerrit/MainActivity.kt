@@ -63,7 +63,6 @@ import androidx.paging.compose.itemsIndexed
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.omnirom.omnigerrit.model.Change
-import org.omnirom.omnigerrit.model.ChangeFilter
 import org.omnirom.omnigerrit.model.Device
 import org.omnirom.omnigerrit.model.MainViewModel
 import org.omnirom.omnigerrit.ui.theme.OmniGerritTheme
@@ -93,10 +92,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         localDateTimeFormat =
-            DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, Locale.getDefault())
-        localDateTimeFormat.timeZone = TimeZone.getDefault()
+            DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.LONG, Locale.getDefault())
+        localDateTimeFormat.timeZone = TimeZone.getTimeZone("UTC")
         localDateFormat =
-            DateFormat.getDateInstance(DateFormat.SHORT, Locale.getDefault())
+            DateFormat.getDateInstance(DateFormat.MEDIUM, Locale.getDefault())
+        localDateFormat.timeZone = TimeZone.getTimeZone("UTC")
 
         lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -139,9 +139,9 @@ class MainActivity : ComponentActivity() {
                 changesPager = viewModel.changesPager.collectAsLazyPagingItems()
 
                 changesListState = rememberLazyListState()
-                val projectFilter = viewModel.projectFilter.collectAsState()
+                val projectFilter by viewModel.projectFilter.collectAsState()
                 var queryDateAfterExpanded by remember { mutableStateOf(false) }
-                val queryDateAfter = viewModel.queryDateAfter.collectAsState()
+                val queryDateAfter by viewModel.queryDateAfter.collectAsState()
                 var projectFilterExpanded by remember { mutableStateOf(false) }
 
                 Surface(
@@ -178,7 +178,7 @@ class MainActivity : ComponentActivity() {
                                             projectFilterExpanded = true
                                         }
                                     ) {
-                                        if (projectFilter.value) {
+                                        if (projectFilter) {
                                             BadgedBox(
                                                 badge = {
                                                     Badge(containerColor = MaterialTheme.colorScheme.primary) {
@@ -206,24 +206,43 @@ class MainActivity : ComponentActivity() {
                                     DropdownMenu(
                                         expanded = projectFilterExpanded,
                                         onDismissRequest = { projectFilterExpanded = false },
-                                        modifier = Modifier.background(MaterialTheme.colorScheme.background)
                                     ) {
-                                        if (projectFilter.value) {
-                                            DropdownMenuItem(
-                                                onClick = {
-                                                    projectFilterExpanded = false
-                                                    viewModel.setProjectFilter(false)
-                                                }, leadingIcon = {
-                                                    Icon(
-                                                        painter = painterResource(id = R.drawable.ic_filter_off),
-                                                        contentDescription = "",
-                                                    )
-                                                }, text = {
-                                                    Text(
-                                                        text = "Show all",
-                                                    )
-                                                })
+                                        Row(
+                                            modifier = Modifier
+                                                .height(48.dp)
+                                                .fillMaxWidth()
+                                                .background(color = MaterialTheme.colorScheme.primary)
+                                                .padding(start = 14.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            val header = if (!projectFilter) {
+                                                "All devices"
+                                            } else {
+                                                "Device " + BuildImageUtils.device
+                                            }
+                                            Text(
+                                                text = header,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onPrimary
+                                            )
                                         }
+                                        Divider()
+                                        DropdownMenuItem(
+                                            onClick = {
+                                                projectFilterExpanded = false
+                                                viewModel.setProjectFilter(false)
+                                            }, leadingIcon = {
+                                                Icon(
+                                                    painter = painterResource(id = R.drawable.ic_filter_off),
+                                                    contentDescription = "",
+                                                )
+                                            }, text = {
+                                                Text(
+                                                    text = "Show all",
+                                                    style = MaterialTheme.typography.bodyMedium
+                                                )
+                                            })
+
                                         DropdownMenuItem(
                                             onClick = {
                                                 projectFilterExpanded = false
@@ -235,7 +254,8 @@ class MainActivity : ComponentActivity() {
                                                 )
                                             }, text = {
                                                 Text(
-                                                    text = BuildImageUtils.device
+                                                    text = "Filter for " + BuildImageUtils.device,
+                                                    style = MaterialTheme.typography.bodyMedium
                                                 )
                                             })
                                     }
@@ -244,7 +264,7 @@ class MainActivity : ComponentActivity() {
                                             queryDateAfterExpanded = true
                                         }
                                     ) {
-                                        if (queryDateAfter.value.isNotEmpty()) {
+                                        if (queryDateAfter != 0L) {
                                             BadgedBox(badge = {
                                                 Badge(containerColor = MaterialTheme.colorScheme.primary) {
                                                     Icon(
@@ -270,35 +290,50 @@ class MainActivity : ComponentActivity() {
                                     DropdownMenu(
                                         expanded = queryDateAfterExpanded,
                                         onDismissRequest = { queryDateAfterExpanded = false },
-                                        modifier = Modifier.background(MaterialTheme.colorScheme.background)
                                     ) {
-                                        if (queryDateAfter.value.isNotEmpty()) {
-                                            DropdownMenuItem(
-                                                onClick = {
-                                                    queryDateAfterExpanded = false
-                                                    viewModel.setQueryDateAfter("")
-                                                }, leadingIcon = {
-                                                    Icon(
-                                                        painter = painterResource(id = R.drawable.ic_filter_off),
-                                                        contentDescription = "",
-                                                    )
-                                                }, text = {
-                                                    Text(
-                                                        text = "Show all",
-                                                    )
-                                                })
+                                        Row(
+                                            modifier = Modifier
+                                                .height(48.dp)
+                                                .fillMaxWidth()
+                                                .background(color = MaterialTheme.colorScheme.primary)
+                                                .padding(start = 14.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            val header = if (queryDateAfter == 0L) {
+                                                "All changes"
+                                            } else {
+                                                "Since " + localDateFormat.format(
+                                                    queryDateAfter
+                                                )
+                                            }
+                                            Text(
+                                                text = header,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onPrimary
+                                            )
                                         }
+                                        Divider()
+                                        DropdownMenuItem(
+                                            onClick = {
+                                                queryDateAfterExpanded = false
+                                                viewModel.setQueryDateAfter(0)
+                                            }, leadingIcon = {
+                                                Icon(
+                                                    painter = painterResource(id = R.drawable.ic_filter_off),
+                                                    contentDescription = "",
+                                                )
+                                            }, text = {
+                                                Text(
+                                                    text = "Show all",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                )
+                                            })
                                         if (Device.getBuildDateInMillis(applicationContext) != 0L) {
                                             DropdownMenuItem(
                                                 onClick = {
                                                     queryDateAfterExpanded = false
                                                     viewModel.setQueryDateAfter(
-                                                        ChangeFilter.gerritDateFormat.format(
-                                                            Device.getBuildDateInMillis(
-                                                                applicationContext
-                                                            )
-                                                        )
-                                                    )
+                                                        Device.getBuildDateInMillis(applicationContext))
                                                 }, leadingIcon = {
                                                     Icon(
                                                         painter = painterResource(id = R.drawable.show_since),
@@ -306,11 +341,12 @@ class MainActivity : ComponentActivity() {
                                                     )
                                                 }, text = {
                                                     Text(
-                                                        text = "Since this build " + ChangeFilter.gerritDateFormat.format(
+                                                        text = "Since this build " + localDateFormat.format(
                                                             Device.getBuildDateInMillis(
                                                                 applicationContext
                                                             )
                                                         ),
+                                                        style = MaterialTheme.typography.bodyMedium,
                                                     )
                                                 })
                                         }
@@ -325,7 +361,8 @@ class MainActivity : ComponentActivity() {
                                                 )
                                             }, text = {
                                                 Text(
-                                                    text = "Since " + queryDateAfter.value,
+                                                    text = "Select start date",
+                                                    style = MaterialTheme.typography.bodyMedium,
                                                 )
                                             })
                                     }
@@ -473,13 +510,14 @@ class MainActivity : ComponentActivity() {
             bgColor = MaterialTheme.colorScheme.tertiaryContainer
         }
 
+        var itemMenuExpanded by remember { mutableStateOf(false) }
+
         val date = localDateTimeFormat.format(changeTime)
         Row(
             modifier = Modifier
                 .padding(top = 4.dp, bottom = 4.dp)
                 .background(bgColor, shape = RoundedCornerShape(size = 4.dp))
                 .heightIn(min = 88.dp)
-                .padding(start = 10.dp, end = 10.dp)
                 .combinedClickable(onClick = {
                     if (change.id.isNotEmpty()) {
                         coroutineScope.launch {
@@ -501,16 +539,11 @@ class MainActivity : ComponentActivity() {
                         viewModel.loadChange(change)
                     }
                 }, onLongClick = {
-                    // TODO - mybe better menu
-                    if (change._number.isNotEmpty()) {
-                        showChangeInGerrit(change._number)
-                    } else {
-                        showOtaBuildDirInBrowser()
-                    }
+                    itemMenuExpanded = true
                 }),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column() {
+            Column(modifier = Modifier.padding(start = 10.dp, end = 10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = change.subject,
@@ -537,6 +570,39 @@ class MainActivity : ComponentActivity() {
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
+            }
+            DropdownMenu(
+                expanded = itemMenuExpanded,
+                onDismissRequest = { itemMenuExpanded = false }) {
+                DropdownMenuItem(
+                    onClick = {
+                        itemMenuExpanded = false
+
+                        if (change._number.isNotEmpty()) {
+                            showChangeInGerrit(change._number)
+                        } else {
+                            showOtaBuildDirInBrowser()
+                        }
+                    }, text = {
+                        Text(
+                            text = if (change._number.isNotEmpty()) {
+                                "Show in Gerrit"
+                            } else {
+                                "Show available builds"
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    })
+                DropdownMenuItem(
+                    onClick = {
+                        itemMenuExpanded = false
+                        viewModel.setQueryDateAfter(change.updatedInMillis)
+                    }, text = {
+                        Text(
+                            text = "Show since this change",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    })
             }
         }
     }
@@ -863,10 +929,7 @@ class MainActivity : ComponentActivity() {
 
     private fun doSelectStartTime() {
         val c = Calendar.getInstance()
-        if (viewModel.queryDateAfter.value.isNotEmpty()) {
-            c.timeInMillis =
-                ChangeFilter.gerritDateFormat.parse(viewModel.queryDateAfter.value)?.time ?: 0
-        }
+        c.timeInMillis = viewModel.queryDateAfter.value
         val day = c[Calendar.DAY_OF_MONTH]
         val year = c[Calendar.YEAR]
         val month = c[Calendar.MONTH]
@@ -880,8 +943,7 @@ class MainActivity : ComponentActivity() {
                 c[Calendar.MONTH] = monthOfYear
                 c[Calendar.HOUR_OF_DAY] = 0
                 c[Calendar.MINUTE] = 0
-                bottomSheetValue.value = BottomSheetValue.Collapsed
-                viewModel.setQueryDateAfter(ChangeFilter.gerritDateFormat.format(c.timeInMillis))
+                viewModel.setQueryDateAfter(c.timeInMillis)
             }, year, month, day
         )
         datePickerDialog.show()

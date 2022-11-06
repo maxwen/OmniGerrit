@@ -18,12 +18,15 @@
 package org.omnirom.omnigerrit.model
 
 import androidx.annotation.Keep
+import org.omnirom.omnigerrit.utils.BuildImageUtils
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.*
 
 @Keep
 data class BuildImage(val filename: String, val timestamp: Long, val size: Long) :
     Comparable<BuildImage> {
+
     override fun compareTo(other: BuildImage): Int {
         return other.getBuildDate().compareTo(getBuildDate())
     }
@@ -45,11 +48,15 @@ data class BuildImage(val filename: String, val timestamp: Long, val size: Long)
     }
 
     fun getBuildDateInMillis() : Long {
-        val otaDateFormat  = SimpleDateFormat("yyyyMMdd")
-        otaDateFormat.timeZone = TimeZone.getTimeZone("UTC")
         val buildDate = getBuildDate()
         if (buildDate.isNotEmpty()) {
-            return otaDateFormat.parse(buildDate).time
+            return try {
+                // new format
+                BuildImageUtils.otaDateTimeFormat.parse(buildDate)?.time ?: 0
+            } catch (e: ParseException) {
+                // fallback to old format
+                BuildImageUtils.otaDateFormat.parse(buildDate)?.time ?: 0
+            }
         }
         return 0
     }

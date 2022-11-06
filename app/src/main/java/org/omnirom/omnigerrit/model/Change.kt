@@ -35,6 +35,6 @@ data class Change(
     )
 
     val updatedInMillis by lazy {
-        ChangeFilter.gerritDateTimeFormat.parse(updated).time
+        ChangeFilter.gerritDateTimeFormat.parse(updated)?.time?:0
     }
 }

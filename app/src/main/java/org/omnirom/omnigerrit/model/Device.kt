@@ -18,7 +18,9 @@
 package org.omnirom.omnigerrit.model
 
 import android.content.Context
+import org.omnirom.omnigerrit.utils.BuildImageUtils
 import org.omnirom.omnigerrit.utils.DeviceUtils
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -52,11 +54,15 @@ object Device {
     }
 
     fun getBuildDateInMillis(context: Context) : Long {
-        val otaDateFormat  = SimpleDateFormat("yyyyMMdd")
-        otaDateFormat.timeZone = TimeZone.getTimeZone("UTC")
         val buildDate = getBuildDate(context)
         if (buildDate.isNotEmpty()) {
-            return otaDateFormat.parse(buildDate).time
+            return try {
+                // new format
+                BuildImageUtils.otaDateTimeFormat.parse(buildDate)?.time ?: 0
+            } catch (e: ParseException) {
+                // fallback to old format
+                BuildImageUtils.otaDateFormat.parse(buildDate)?.time ?: 0
+            }
         }
         return 0
     }
