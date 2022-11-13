@@ -1,10 +1,12 @@
 package org.omnirom.omnigerrit
 
 import android.annotation.SuppressLint
+import android.app.ActivityManager
 import android.app.DatePickerDialog
 import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -87,9 +89,22 @@ class MainActivity : ComponentActivity() {
     private val changeDetailScrollState = ScrollState(0)
     private val bottomSheetValue = mutableStateOf(BottomSheetValue.Collapsed)
 
+    private fun getAttrColor(attr: Int): Int {
+        val ta = obtainStyledAttributes(intArrayOf(attr))
+        val color = ta.getColor(0, 0)
+        ta.recycle()
+        return color
+    }
+    
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val td = ActivityManager.TaskDescription.Builder()
+                .setPrimaryColor(getAttrColor(android.R.attr.colorPrimary)).build()
+            setTaskDescription(td)
+        }
 
         localDateTimeFormat =
             DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.LONG, Locale.getDefault())
@@ -101,9 +116,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.triggerReload.collectLatest {
-                    if (viewModel.isConnected.value) {
-                        changesPager?.refresh()
-                    }
+                    changesPager?.refresh()
                 }
             }
         }
@@ -121,9 +134,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.queryFilter.collectLatest {
-                    if (viewModel.isConnected.value) {
-                        changesPager?.refresh()
-                    }
+                    changesPager?.refresh()
                 }
             }
         }
@@ -137,12 +148,7 @@ class MainActivity : ComponentActivity() {
                 )
                 changeDetail = viewModel.changeDetail.collectAsState()
                 changesPager = viewModel.changesPager.collectAsLazyPagingItems()
-
                 changesListState = rememberLazyListState()
-                val projectFilter by viewModel.projectFilter.collectAsState()
-                var queryDateAfterExpanded by remember { mutableStateOf(false) }
-                val queryDateAfter by viewModel.queryDateAfter.collectAsState()
-                var projectFilterExpanded by remember { mutableStateOf(false) }
 
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -173,211 +179,11 @@ class MainActivity : ComponentActivity() {
                         bottomBar = {
                             BottomAppBar(
                                 actions = {
-                                    IconButton(
-                                        onClick = {
-                                            projectFilterExpanded = true
-                                        }
-                                    ) {
-                                        if (projectFilter) {
-                                            BadgedBox(
-                                                badge = {
-                                                    Badge(containerColor = MaterialTheme.colorScheme.primary) {
-                                                        Icon(
-                                                            Icons.Outlined.Done,
-                                                            contentDescription = "",
-                                                            tint = MaterialTheme.colorScheme.onPrimary,
-                                                            modifier = Modifier.size(8.dp)
-                                                        )
-                                                    }
-                                                },
-                                            ) {
-                                                Icon(
-                                                    painterResource(id = R.drawable.ic_devices),
-                                                    contentDescription = ""
-                                                )
-                                            }
-                                        } else {
-                                            Icon(
-                                                painter = painterResource(id = R.drawable.ic_devices),
-                                                contentDescription = "",
-                                            )
-                                        }
-                                    }
-                                    DropdownMenu(
-                                        expanded = projectFilterExpanded,
-                                        onDismissRequest = { projectFilterExpanded = false },
-                                    ) {
-                                        Row(
-                                            modifier = Modifier
-                                                .height(48.dp)
-                                                .fillMaxWidth()
-                                                .background(color = MaterialTheme.colorScheme.primary)
-                                                .padding(start = 14.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            val header = if (!projectFilter) {
-                                                "All devices"
-                                            } else {
-                                                "Device " + BuildImageUtils.device
-                                            }
-                                            Text(
-                                                text = header,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onPrimary
-                                            )
-                                        }
-                                        Divider()
-                                        DropdownMenuItem(
-                                            onClick = {
-                                                projectFilterExpanded = false
-                                                viewModel.setProjectFilter(false)
-                                            }, leadingIcon = {
-                                                Icon(
-                                                    painter = painterResource(id = R.drawable.ic_filter_off),
-                                                    contentDescription = "",
-                                                )
-                                            }, text = {
-                                                Text(
-                                                    text = "Show all",
-                                                    style = MaterialTheme.typography.bodyMedium
-                                                )
-                                            })
-
-                                        DropdownMenuItem(
-                                            onClick = {
-                                                projectFilterExpanded = false
-                                                viewModel.setProjectFilter(true)
-                                            }, leadingIcon = {
-                                                Icon(
-                                                    painter = painterResource(id = R.drawable.ic_devices),
-                                                    contentDescription = "",
-                                                )
-                                            }, text = {
-                                                Text(
-                                                    text = "Filter for " + BuildImageUtils.device,
-                                                    style = MaterialTheme.typography.bodyMedium
-                                                )
-                                            })
-                                    }
-                                    IconButton(
-                                        onClick = {
-                                            queryDateAfterExpanded = true
-                                        }
-                                    ) {
-                                        if (queryDateAfter != 0L) {
-                                            BadgedBox(badge = {
-                                                Badge(containerColor = MaterialTheme.colorScheme.primary) {
-                                                    Icon(
-                                                        Icons.Outlined.Done,
-                                                        contentDescription = "",
-                                                        tint = MaterialTheme.colorScheme.onPrimary,
-                                                        modifier = Modifier.size(8.dp)
-                                                    )
-                                                }
-                                            }) {
-                                                Icon(
-                                                    painterResource(id = R.drawable.show_since),
-                                                    contentDescription = ""
-                                                )
-                                            }
-                                        } else {
-                                            Icon(
-                                                painter = painterResource(id = R.drawable.show_since),
-                                                contentDescription = "",
-                                            )
-                                        }
-                                    }
-                                    DropdownMenu(
-                                        expanded = queryDateAfterExpanded,
-                                        onDismissRequest = { queryDateAfterExpanded = false },
-                                    ) {
-                                        Row(
-                                            modifier = Modifier
-                                                .height(48.dp)
-                                                .fillMaxWidth()
-                                                .background(color = MaterialTheme.colorScheme.primary)
-                                                .padding(start = 14.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            val header = if (queryDateAfter == 0L) {
-                                                "All changes"
-                                            } else {
-                                                "Since " + localDateFormat.format(
-                                                    queryDateAfter
-                                                )
-                                            }
-                                            Text(
-                                                text = header,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onPrimary
-                                            )
-                                        }
-                                        Divider()
-                                        DropdownMenuItem(
-                                            onClick = {
-                                                queryDateAfterExpanded = false
-                                                viewModel.setQueryDateAfter(0)
-                                            }, leadingIcon = {
-                                                Icon(
-                                                    painter = painterResource(id = R.drawable.ic_filter_off),
-                                                    contentDescription = "",
-                                                )
-                                            }, text = {
-                                                Text(
-                                                    text = "Show all",
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                )
-                                            })
-                                        if (Device.getBuildDateInMillis(applicationContext) != 0L) {
-                                            DropdownMenuItem(
-                                                onClick = {
-                                                    queryDateAfterExpanded = false
-                                                    viewModel.setQueryDateAfter(
-                                                        Device.getBuildDateInMillis(applicationContext))
-                                                }, leadingIcon = {
-                                                    Icon(
-                                                        painter = painterResource(id = R.drawable.show_since),
-                                                        contentDescription = "",
-                                                    )
-                                                }, text = {
-                                                    Text(
-                                                        text = "Since this build " + localDateFormat.format(
-                                                            Device.getBuildDateInMillis(
-                                                                applicationContext
-                                                            )
-                                                        ),
-                                                        style = MaterialTheme.typography.bodyMedium,
-                                                    )
-                                                })
-                                        }
-                                        DropdownMenuItem(
-                                            onClick = {
-                                                queryDateAfterExpanded = false
-                                                doSelectStartTime()
-                                            }, leadingIcon = {
-                                                Icon(
-                                                    painter = painterResource(id = R.drawable.show_since),
-                                                    contentDescription = "",
-                                                )
-                                            }, text = {
-                                                Text(
-                                                    text = "Select start date",
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                )
-                                            })
-                                    }
+                                    BottomAppBarContents()
                                 },
                                 floatingActionButton = {
                                     FloatingActionButton(onClick = {
-                                        if (viewModel.isConnected.value) {
-                                            viewModel.reload()
-                                            // TODO - hide bottomsheet on refresh?
-                                            /*coroutineScope.launch {
-                                                updateBottomSheetState(
-                                                    BottomSheetValue.Collapsed
-                                                )
-                                            }*/
-                                        }
+                                        viewModel.reload()
                                     }, containerColor = MaterialTheme.colorScheme.primary) {
                                         Icon(
                                             Icons.Outlined.Refresh,
@@ -657,9 +463,6 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalFoundationApi::class)
     @Composable
     fun ChangeDetails() {
-        /*val linerHeightInDp = with(LocalDensity.current) {
-            MaterialTheme.typography.bodyMedium.lineHeight.toDp()
-        }*/
         val coroutineScope = rememberCoroutineScope()
 
         val nestedScrollConnection = remember {
@@ -970,5 +773,271 @@ class MainActivity : ComponentActivity() {
             bottomSheetScaffoldState.bottomSheetState.expand()
         }
         bottomSheetValue.value = bottomSheetState
+    }
+
+    @Composable
+    fun BottomAppBarContents() {
+        val projectFilter by viewModel.projectFilter.collectAsState()
+        var queryDateAfterExpanded by remember { mutableStateOf(false) }
+        val queryDateAfter by viewModel.queryDateAfter.collectAsState()
+        var projectFilterExpanded by remember { mutableStateOf(false) }
+        val queryBranch by viewModel.queryBranch.collectAsState()
+        var queryBranchExpanded by remember { mutableStateOf(false) }
+        var queryStatusExpanded by remember { mutableStateOf(false) }
+
+        IconButton(
+            onClick = {
+                projectFilterExpanded = true
+            }
+        ) {
+            if (projectFilter) {
+                BadgedBox(
+                    badge = {
+                        Badge(containerColor = MaterialTheme.colorScheme.primary) {
+                            Icon(
+                                Icons.Outlined.Done,
+                                contentDescription = "",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(8.dp)
+                            )
+                        }
+                    },
+                ) {
+                    Icon(
+                        painterResource(id = R.drawable.ic_devices),
+                        contentDescription = ""
+                    )
+                }
+            } else {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_devices),
+                    contentDescription = "",
+                )
+            }
+            DropdownMenu(
+                expanded = projectFilterExpanded,
+                onDismissRequest = { projectFilterExpanded = false },
+            ) {
+                Row(
+                    modifier = Modifier
+                        .height(48.dp)
+                        .fillMaxWidth()
+                        .background(color = MaterialTheme.colorScheme.primary)
+                        .padding(start = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val header = if (!projectFilter) {
+                        "All devices"
+                    } else {
+                        "Device " + BuildImageUtils.device
+                    }
+                    Text(
+                        text = header,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+                Divider()
+                DropdownMenuItem(
+                    onClick = {
+                        projectFilterExpanded = false
+                        viewModel.setProjectFilter(false)
+                    }, leadingIcon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_filter_off),
+                            contentDescription = "",
+                        )
+                    }, text = {
+                        Text(
+                            text = "Show all",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    })
+
+                DropdownMenuItem(
+                    onClick = {
+                        projectFilterExpanded = false
+                        viewModel.setProjectFilter(true)
+                    }, leadingIcon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_devices),
+                            contentDescription = "",
+                        )
+                    }, text = {
+                        Text(
+                            text = "Filter for " + BuildImageUtils.device,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    })
+            }
+        }
+        IconButton(
+            onClick = {
+                queryDateAfterExpanded = true
+            }
+        ) {
+            if (queryDateAfter != 0L) {
+                BadgedBox(badge = {
+                    Badge(containerColor = MaterialTheme.colorScheme.primary) {
+                        Icon(
+                            Icons.Outlined.Done,
+                            contentDescription = "",
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(8.dp)
+                        )
+                    }
+                }) {
+                    Icon(
+                        painterResource(id = R.drawable.show_since),
+                        contentDescription = ""
+                    )
+                }
+            } else {
+                Icon(
+                    painter = painterResource(id = R.drawable.show_since),
+                    contentDescription = "",
+                )
+            }
+            DropdownMenu(
+                expanded = queryDateAfterExpanded,
+                onDismissRequest = { queryDateAfterExpanded = false },
+            ) {
+                Row(
+                    modifier = Modifier
+                        .height(48.dp)
+                        .fillMaxWidth()
+                        .background(color = MaterialTheme.colorScheme.primary)
+                        .padding(start = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val header = if (queryDateAfter == 0L) {
+                        "All changes"
+                    } else {
+                        "Since " + localDateFormat.format(
+                            queryDateAfter
+                        )
+                    }
+                    Text(
+                        text = header,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+                Divider()
+                DropdownMenuItem(
+                    onClick = {
+                        queryDateAfterExpanded = false
+                        viewModel.setQueryDateAfter(0)
+                    }, leadingIcon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_filter_off),
+                            contentDescription = "",
+                        )
+                    }, text = {
+                        Text(
+                            text = "Show all",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    })
+                if (Device.getBuildDateInMillis(applicationContext) != 0L) {
+                    DropdownMenuItem(
+                        onClick = {
+                            queryDateAfterExpanded = false
+                            viewModel.setQueryDateAfter(
+                                Device.getBuildDateInMillis(
+                                    applicationContext
+                                )
+                            )
+                        }, leadingIcon = {
+                            Icon(
+                                painter = painterResource(id = R.drawable.show_since),
+                                contentDescription = "",
+                            )
+                        }, text = {
+                            Text(
+                                text = "Since this build " + localDateFormat.format(
+                                    Device.getBuildDateInMillis(
+                                        applicationContext
+                                    )
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        })
+                }
+                DropdownMenuItem(
+                    onClick = {
+                        queryDateAfterExpanded = false
+                        doSelectStartTime()
+                    }, leadingIcon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.show_since),
+                            contentDescription = "",
+                        )
+                    }, text = {
+                        Text(
+                            text = "Select start date",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    })
+            }
+        }
+        IconButton(
+            onClick = {
+                queryBranchExpanded = true
+            }
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_branch),
+                contentDescription = "",
+            )
+            DropdownMenu(
+                expanded = queryBranchExpanded,
+                onDismissRequest = { queryBranchExpanded = false },
+            ) {
+                Row(
+                    modifier = Modifier
+                        .height(48.dp)
+                        .fillMaxWidth()
+                        .background(color = MaterialTheme.colorScheme.primary)
+                        .padding(start = 14.dp, end=14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Branch " + queryBranch,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+            }
+        }
+        IconButton(
+            onClick = {
+                queryStatusExpanded = true
+            }
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_status),
+                contentDescription = "",
+            )
+            DropdownMenu(
+                expanded = queryStatusExpanded,
+                onDismissRequest = { queryStatusExpanded = false },
+            ) {
+                Row(
+                    modifier = Modifier
+                        .height(48.dp)
+                        .fillMaxWidth()
+                        .background(color = MaterialTheme.colorScheme.primary)
+                        .padding(start = 14.dp, end=14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Status " + viewModel.getQueryFilter().queryStatus.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+            }
+        }
     }
 }

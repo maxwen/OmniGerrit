@@ -17,6 +17,7 @@
  */
 package org.omnirom.omnigerrit.retrofit
 
+import org.omnirom.omnigerrit.model.Branch
 import org.omnirom.omnigerrit.model.Change
 import org.omnirom.omnigerrit.model.CommitInfo
 import retrofit2.Response
@@ -49,4 +50,9 @@ interface GerritApi {
         @Path("id") id: String,
         @Path("revision") revision: String
     ): Response<CommitInfo>
+
+    @GET("projects/{project}/branches")
+    suspend fun getBranches(
+        @Path("project") project: String,
+    ) : Response<List<Branch>>
 }

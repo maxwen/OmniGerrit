@@ -29,6 +29,7 @@ import java.util.*
 object BuildImageUtils {
     private val TAG = "BuildImageUtils"
 
+    // set from app
     var device: String = ""
     var buildType: String = ""
     var version: Version = Version("0")

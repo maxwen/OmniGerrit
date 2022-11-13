@@ -1,7 +1,6 @@
 package org.omnirom.omnigerrit.model
 
 import androidx.compose.material.ExperimentalMaterialApi
-import androidx.compose.material.TextFieldColors
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.Pager
@@ -57,7 +56,11 @@ class MainViewModel() : ViewModel() {
         queryBranch
     ) { queryString, queryDateAfter, projectFilter, queryBranch ->
         ChangeFilter.QueryFilter(queryString, queryDateAfter, projectFilter, queryBranch)
-    }.stateIn(CoroutineScope(Dispatchers.Default), SharingStarted.WhileSubscribed(), ChangeFilter.QueryFilter())
+    }.stateIn(
+        CoroutineScope(Dispatchers.Default),
+        SharingStarted.WhileSubscribed(),
+        ChangeFilter.QueryFilter()
+    )
 
     init {
         viewModelScope.launch {
@@ -68,21 +71,25 @@ class MainViewModel() : ViewModel() {
         viewModelScope.launch {
             NetworkUtils.connectivityObserver.observe().collectLatest { status ->
                 val connected = status == ConnectivityObserver.Status.Available
-                if (initialIsConnected != ConnectivityObserver.Status.Available && connected) {
-                    reload()
-                }
                 _isConnected.value = connected
+                if (initialIsConnected != ConnectivityObserver.Status.Available && connected) {
+                    LogUtils.d(TAG, "connected")
+                    initDeviceBuilds()
+                }
             }
         }
 
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                initDeviceBuildSync()
-                ChangeFilter.loadProjectFilterConfigFile()
-                if (!ChangeFilter.hasDeviceConfig()) {
-                    snackbarShow.emit("No device config for " + BuildImageUtils.device)
+        if (isConnected.value) {
+            viewModelScope.launch {
+                withContext(Dispatchers.IO) {
+                    initDeviceBuildSync()
+                    ChangeFilter.loadProjectFilterConfigFile()
+                    if (!ChangeFilter.hasDeviceConfig()) {
+                        showSnackbarMessage("No device config for " + BuildImageUtils.device)
+                    }
+                    loadBranchesSync()
+                    triggerReload.emit(true)
                 }
-                triggerReload.emit(true)
             }
         }
     }
@@ -100,28 +107,33 @@ class MainViewModel() : ViewModel() {
 
     fun reload() {
         LogUtils.d(TAG, "reload")
-        initDeviceBuilds()
-        //_changeDetail.value = null
+        if (isConnected.value) {
+            initDeviceBuilds()
+            //_changeDetail.value = null
+        }
     }
 
     fun loadChange(change: Change) {
-        viewModelScope.launch {
-            //_changeDetail.value = null
-            val changes = gerritApi.getChanges(
-                params = change.id,
-                options = listOf("CURRENT_REVISION", "DETAILED_ACCOUNTS")
-            )
-            if (changes.isSuccessful && changes.body() != null) {
-                val changeList = changes.body()!!
-                if (changeList.size == 1) {
-                    val changeDetail = changeList.first()
-                    val commit = gerritApi.getCommit(changeDetail.id, changeDetail.current_revision)
-                    if (commit.isSuccessful && commit.body() != null) {
-                        changeDetail.commit = commit.body()
+        if (isConnected.value) {
+            viewModelScope.launch {
+                //_changeDetail.value = null
+                val changes = gerritApi.getChanges(
+                    params = change.id,
+                    options = listOf("CURRENT_REVISION", "DETAILED_ACCOUNTS")
+                )
+                if (changes.isSuccessful && changes.body() != null) {
+                    val changeList = changes.body()!!
+                    if (changeList.size == 1) {
+                        val changeDetail = changeList.first()
+                        val commit =
+                            gerritApi.getCommit(changeDetail.id, changeDetail.current_revision)
+                        if (commit.isSuccessful && commit.body() != null) {
+                            changeDetail.commit = commit.body()
+                        }
+                        _changeDetail.value = changeDetail
+                        LogUtils.d(TAG, "changeDetail = " + this@MainViewModel.changeDetail.value)
+                        return@launch
                     }
-                    _changeDetail.value = changeDetail
-                    LogUtils.d(TAG, "changeDetail = " + this@MainViewModel.changeDetail.value)
-                    return@launch
                 }
             }
         }
@@ -132,6 +144,11 @@ class MainViewModel() : ViewModel() {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 initDeviceBuildSync()
+                ChangeFilter.loadProjectFilterConfigFile()
+                if (!ChangeFilter.hasDeviceConfig()) {
+                    showSnackbarMessage("No device config for " + BuildImageUtils.device)
+                }
+                loadBranchesSync()
                 triggerReload.emit(true)
             }
         }
@@ -175,9 +192,27 @@ class MainViewModel() : ViewModel() {
         }
     }
 
-    fun getQueryFilter() : ChangeFilter.QueryFilter {
-        return ChangeFilter.QueryFilter(queryString.value, queryDateAfter.value,
+    fun getQueryFilter(): ChangeFilter.QueryFilter {
+        return ChangeFilter.QueryFilter(
+            queryString.value, queryDateAfter.value,
             projectFilter.value,
-            queryBranch.value, queryProject = "")
+            queryBranch.value, queryProject = ""
+        )
+    }
+
+    private suspend fun loadBranchesSync() {
+        val branches = gerritApi.getBranches("android_vendor_omni")
+        if (branches.isSuccessful && branches.body() != null) {
+            val branchList = branches.body()!!
+            LogUtils.d(TAG, "branches = " + branchList)
+        }
+    }
+
+    private fun loadBranches() {
+        if (isConnected.value) {
+            viewModelScope.launch {
+                loadBranchesSync()
+            }
+        }
     }
 }

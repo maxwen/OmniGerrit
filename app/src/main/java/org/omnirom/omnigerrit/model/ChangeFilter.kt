@@ -17,6 +17,7 @@ import javax.xml.parsers.DocumentBuilderFactory
 object ChangeFilter {
     val TAG = "ChangeFilter"
 
+    // set from App
     var defaultBranch: String = ""
     val gerritDateTimeFormat by lazy {
         initDateTimeFormat()
