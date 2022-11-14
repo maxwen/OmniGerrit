@@ -30,11 +30,14 @@ data class Change(
     val owner: Owner = Owner("", -1)
 ) {
     constructor(buildImage: BuildImage) : this(
-        subject = "Build: " + buildImage.filename,
+        subject = "Build " + buildImage.getDevice(),
+        id = "42",
         updated = ChangeFilter.gerritDateTimeFormat.format(buildImage.getBuildDateInMillis())
     )
 
     val updatedInMillis by lazy {
         ChangeFilter.gerritDateTimeFormat.parse(updated)?.time?:0
     }
+
+    fun isBuildChange() = id == "42"
 }

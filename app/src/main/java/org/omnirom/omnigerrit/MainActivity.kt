@@ -72,6 +72,7 @@ import org.omnirom.omnigerrit.ui.theme.isTablet
 import org.omnirom.omnigerrit.utils.BuildImageUtils
 import org.omnirom.omniota.model.RetrofitManager
 import java.text.DateFormat
+import java.time.format.TextStyle
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
@@ -95,7 +96,7 @@ class MainActivity : ComponentActivity() {
         ta.recycle()
         return color
     }
-    
+
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -229,7 +230,7 @@ class MainActivity : ComponentActivity() {
     fun Changes() {
         val queryString = viewModel.queryString.collectAsState()
 
-        Column(modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 14.dp)) {
+        Column(modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 10.dp)) {
             Row() {
                 OutlinedTextField(
                     value = queryString.value,
@@ -263,7 +264,7 @@ class MainActivity : ComponentActivity() {
             val buildsMapLoaded = viewModel.buildsMapLoaded.collectAsState()
 
             if (connected.value) {
-                LazyColumn(modifier = Modifier.padding(top = 4.dp), state = changesListState) {
+                LazyColumn(modifier = Modifier.padding(top = 8.dp), state = changesListState) {
                     itemsIndexed(items = changesPager!!) { index, change ->
                         val changeTime = change!!.updatedInMillis
                         ChangeItem(index, change, changeTime)
@@ -312,7 +313,7 @@ class MainActivity : ComponentActivity() {
         )
         if (selected) {
             bgColor = MaterialTheme.colorScheme.secondaryContainer
-        } else if (change.id.isEmpty()) {
+        } else if (change.isBuildChange()) {
             bgColor = MaterialTheme.colorScheme.tertiaryContainer
         }
 
@@ -322,10 +323,10 @@ class MainActivity : ComponentActivity() {
         Row(
             modifier = Modifier
                 .padding(top = 4.dp, bottom = 4.dp)
-                .background(bgColor, shape = RoundedCornerShape(size = 4.dp))
+                .background(bgColor, shape = RoundedCornerShape(size = 8.dp))
                 .heightIn(min = 88.dp)
                 .combinedClickable(onClick = {
-                    if (change.id.isNotEmpty()) {
+                    if (!change.isBuildChange()) {
                         coroutineScope.launch {
                             // scroll up if behind bottom sheet
                             if (bottomSheetScaffoldState.bottomSheetState.isCollapsed) {
@@ -349,7 +350,14 @@ class MainActivity : ComponentActivity() {
                 }),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.padding(start = 10.dp, end = 10.dp)) {
+            Column(
+                modifier = Modifier.padding(
+                    start = 10.dp,
+                    end = 10.dp,
+                    top = 10.dp,
+                    bottom = 10.dp
+                )
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = change.subject,
@@ -358,13 +366,16 @@ class MainActivity : ComponentActivity() {
                             .weight(1f, true),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.titleMedium,
                     )
                 }
-                if (change.id.isNotEmpty()) {
+
+                if (!change.isBuildChange()) {
                     Text(
                         text = date + " by " + change.owner.name,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 10.dp),
                         maxLines = 1,
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -373,6 +384,15 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxWidth(),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                } else {
+                    Text(
+                        text = date,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 10.dp),
+                        maxLines = 1,
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -999,7 +1019,7 @@ class MainActivity : ComponentActivity() {
                         .height(48.dp)
                         .fillMaxWidth()
                         .background(color = MaterialTheme.colorScheme.primary)
-                        .padding(start = 14.dp, end=14.dp),
+                        .padding(start = 14.dp, end = 14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
@@ -1028,7 +1048,7 @@ class MainActivity : ComponentActivity() {
                         .height(48.dp)
                         .fillMaxWidth()
                         .background(color = MaterialTheme.colorScheme.primary)
-                        .padding(start = 14.dp, end=14.dp),
+                        .padding(start = 14.dp, end = 14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
