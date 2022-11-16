@@ -4,4 +4,13 @@
     <style name="Theme.OmniGerrit" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:windowSplashScreenIconBackgroundColor">@color/omni_logo_color</item>
     </style>
+
+    <style name="Theme.OmniGerrit.DatePickerDialog" parent="@style/Theme.AppCompat.DayNight.Dialog.Alert">
+        <item name="colorAccent">@color/dialogColorAccent</item>
+        <item name="android:colorBackground">@color/dialogBackground</item>
+        <item name="android:windowSoftInputMode">adjustResize</item>
+        <item name="android:clipToPadding">true</item>
+        <item name="android:clipChildren">true</item>
+        <item name="dialogCornerRadius">8dp</item>
+    </style>
 </resources>
