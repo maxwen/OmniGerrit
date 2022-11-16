@@ -30,8 +30,8 @@ data class Change(
     val owner: Owner = Owner("", -1)
 ) {
     constructor(buildImage: BuildImage) : this(
-        subject = "Build " + buildImage.getDevice(),
-        id = "42",
+        subject = "Build " + buildImage.getDevice() + " " + buildImage.getBuildType(),
+        id = "-1",
         updated = ChangeFilter.gerritDateTimeFormat.format(buildImage.getBuildDateInMillis())
     )
 
@@ -39,5 +39,5 @@ data class Change(
         ChangeFilter.gerritDateTimeFormat.parse(updated)?.time?:0
     }
 
-    fun isBuildChange() = id == "42"
+    fun isBuildChange() = id == "-1"
 }

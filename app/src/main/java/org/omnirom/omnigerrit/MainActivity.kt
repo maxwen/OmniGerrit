@@ -39,12 +39,14 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -55,6 +57,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -72,7 +75,7 @@ import org.omnirom.omnigerrit.ui.theme.isTablet
 import org.omnirom.omnigerrit.utils.BuildImageUtils
 import org.omnirom.omniota.model.RetrofitManager
 import java.text.DateFormat
-import java.time.format.TextStyle
+import java.time.LocalTime
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
@@ -100,6 +103,8 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        WindowCompat.setDecorFitsSystemWindows(window, false)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val td = ActivityManager.TaskDescription.Builder()
@@ -150,33 +155,48 @@ class MainActivity : ComponentActivity() {
                 changeDetail = viewModel.changeDetail.collectAsState()
                 changesPager = viewModel.changesPager.collectAsLazyPagingItems()
                 changesListState = rememberLazyListState()
+                val queryString = viewModel.queryString.collectAsState()
 
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
                     Scaffold(
-                        /*topBar = {
+                        topBar = {
                             TopAppBar(
                                 title = {
-                                    Text(
-                                        text = stringResource(id = R.string.app_name)
-                                    )
-                                },
-                                actions = {
-                                    IconButton(
-                                        onClick = {
-                                            viewModel.showSnackbarMessage("Nothing to see here yet")
-                                        }
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(id = R.drawable.ic_settings),
-                                            contentDescription = "",
+                                    Column(modifier = Modifier.padding(end = 14.dp)) {
+                                        OutlinedTextField(
+                                            value = queryString.value,
+                                            onValueChange = {
+                                                viewModel.setQueryString(it)
+                                            },
+                                            modifier = Modifier
+                                                .fillMaxWidth(),
+                                            textStyle = MaterialTheme.typography.bodyMedium,
+                                            leadingIcon = {
+                                                Icon(
+                                                    Icons.Outlined.Search,
+                                                    contentDescription = null
+                                                )
+                                            },
+                                            placeholder = {
+                                                Text(
+                                                    text = "Enter word to match",
+                                                    style = MaterialTheme.typography.bodyMedium
+                                                )
+                                            },
+                                            maxLines = 1,
+                                            colors = TextFieldDefaults.textFieldColors(
+                                                containerColor = MaterialTheme.colorScheme.surface,
+                                                unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
+                                            ),
+                                            shape = RoundedCornerShape(20.dp)
                                         )
                                     }
                                 },
                             )
-                        },*/
+                        },
                         bottomBar = {
                             BottomAppBar(
                                 actions = {
@@ -219,7 +239,6 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        //DateSelectDialog()
                     }
                 }
             }
@@ -228,38 +247,7 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun Changes() {
-        val queryString = viewModel.queryString.collectAsState()
-
-        Column(modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 10.dp)) {
-            Row() {
-                OutlinedTextField(
-                    value = queryString.value,
-                    onValueChange = {
-                        viewModel.setQueryString(it)
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    textStyle = MaterialTheme.typography.bodyMedium,
-                    leadingIcon = {
-                        Icon(
-                            Icons.Outlined.Search,
-                            contentDescription = null
-                        )
-                    },
-                    placeholder = {
-                        Text(
-                            text = "Enter word to match",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    },
-                    maxLines = 1,
-                    colors = TextFieldDefaults.textFieldColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
-                    ),
-                    shape = RoundedCornerShape(20.dp)
-                )
-            }
+        Column(modifier = Modifier.padding(start = 10.dp, end = 10.dp)) {
             val connected = viewModel.isConnected.collectAsState()
             val buildsMapLoaded = viewModel.buildsMapLoaded.collectAsState()
 
@@ -377,14 +365,16 @@ class MainActivity : ComponentActivity() {
                             .fillMaxWidth()
                             .padding(top = 10.dp),
                         maxLines = 1,
-                        style = MaterialTheme.typography.bodySmall
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(getAttrColor(android.R.attr.textColorSecondary))
                     )
                     Text(
                         text = change.project,
                         modifier = Modifier.fillMaxWidth(),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(getAttrColor(android.R.attr.textColorSecondary))
                     )
                 } else {
                     Text(
@@ -393,7 +383,8 @@ class MainActivity : ComponentActivity() {
                             .fillMaxWidth()
                             .padding(top = 10.dp),
                         maxLines = 1,
-                        style = MaterialTheme.typography.bodySmall
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(getAttrColor(android.R.attr.textColorSecondary))
                     )
                 }
             }
@@ -500,6 +491,7 @@ class MainActivity : ComponentActivity() {
         var selectedTab by rememberSaveable { mutableStateOf<Int>(0) }
         Column(
             modifier = Modifier
+                .nestedScroll(nestedScrollConnection)
                 .background(
                     color = MaterialTheme.colorScheme.surfaceColorAtElevation(
                         3.dp
@@ -507,7 +499,6 @@ class MainActivity : ComponentActivity() {
                 )
                 .height(height = if (isLandscapeSpacing()) 140.dp else 220.dp)
                 .padding(start = 14.dp, end = 14.dp)
-                .nestedScroll(nestedScrollConnection)
         ) {
             Column() {
 
@@ -752,7 +743,9 @@ class MainActivity : ComponentActivity() {
 
     private fun doSelectStartTime() {
         val c = Calendar.getInstance()
-        c.timeInMillis = viewModel.queryDateAfter.value
+        if (viewModel.queryDateAfter.value != 0L) {
+            c.timeInMillis = viewModel.queryDateAfter.value
+        }
         val day = c[Calendar.DAY_OF_MONTH]
         val year = c[Calendar.YEAR]
         val month = c[Calendar.MONTH]
