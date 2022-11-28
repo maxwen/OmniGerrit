@@ -106,12 +106,6 @@ class MainActivity : ComponentActivity() {
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val td = ActivityManager.TaskDescription.Builder()
-                .setPrimaryColor(getAttrColor(android.R.attr.colorPrimary)).build()
-            setTaskDescription(td)
-        }
-
         localDateTimeFormat =
             DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.LONG, Locale.getDefault())
         localDateTimeFormat.timeZone = TimeZone.getTimeZone("UTC")

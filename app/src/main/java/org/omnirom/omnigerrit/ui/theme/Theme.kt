@@ -1,6 +1,7 @@
 package org.omnirom.omnigerrit.ui.theme
 
 import android.app.Activity
+import android.app.ActivityManager
 import android.content.res.Configuration
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -64,9 +65,13 @@ fun OmniGerritTheme(
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            (view.context as Activity).window.statusBarColor = colorScheme.background.toArgb()
+            (view.context as Activity).window.statusBarColor = Color.Transparent.toArgb()
+            (view.context as Activity).window.navigationBarColor = Color.Transparent.toArgb()
             ViewCompat.getWindowInsetsController(view)?.isAppearanceLightStatusBars = !darkTheme
         }
+        val td = ActivityManager.TaskDescription.Builder()
+            .setPrimaryColor(colorScheme.primary.toArgb()).build()
+        (view.context as Activity).setTaskDescription(td)
     }
 
     isTablet = isTablet(LocalConfiguration.current)
