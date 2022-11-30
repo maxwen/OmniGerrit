@@ -1,12 +1,10 @@
 package org.omnirom.omnigerrit
 
 import android.annotation.SuppressLint
-import android.app.ActivityManager
 import android.app.DatePickerDialog
 import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -39,7 +37,6 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -75,7 +72,6 @@ import org.omnirom.omnigerrit.ui.theme.isTablet
 import org.omnirom.omnigerrit.utils.BuildImageUtils
 import org.omnirom.omniota.model.RetrofitManager
 import java.text.DateFormat
-import java.time.LocalTime
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
@@ -150,7 +146,10 @@ class MainActivity : ComponentActivity() {
                 changesPager = viewModel.changesPager.collectAsLazyPagingItems()
                 changesListState = rememberLazyListState()
                 val queryString = viewModel.queryString.collectAsState()
-
+                val topAppBarColor =
+                    if (changesListState.firstVisibleItemIndex != 0 || changesListState.isScrollInProgress) MaterialTheme.colorScheme.surfaceColorAtElevation(
+                        elevation = 3.dp
+                    ) else MaterialTheme.colorScheme.surface
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -158,8 +157,9 @@ class MainActivity : ComponentActivity() {
                     Scaffold(
                         topBar = {
                             TopAppBar(
+                                colors = TopAppBarDefaults.smallTopAppBarColors(containerColor = topAppBarColor),
                                 title = {
-                                    Column(modifier = Modifier.padding(end = 14.dp)) {
+                                    Column(modifier = Modifier.padding(end = 14.dp, bottom = 8.dp)) {
                                         OutlinedTextField(
                                             value = queryString.value,
                                             onValueChange = {
@@ -182,7 +182,7 @@ class MainActivity : ComponentActivity() {
                                             },
                                             maxLines = 1,
                                             colors = TextFieldDefaults.textFieldColors(
-                                                containerColor = MaterialTheme.colorScheme.surface,
+                                                containerColor = topAppBarColor,
                                                 unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
                                             ),
                                             shape = RoundedCornerShape(20.dp)
@@ -246,7 +246,7 @@ class MainActivity : ComponentActivity() {
             val buildsMapLoaded = viewModel.buildsMapLoaded.collectAsState()
 
             if (connected.value) {
-                LazyColumn(modifier = Modifier.padding(top = 8.dp), state = changesListState) {
+                LazyColumn(state = changesListState) {
                     itemsIndexed(items = changesPager!!) { index, change ->
                         val changeTime = change!!.updatedInMillis
                         ChangeItem(index, change, changeTime)
