@@ -72,6 +72,7 @@ import org.omnirom.omnigerrit.ui.theme.isTablet
 import org.omnirom.omnigerrit.utils.BuildImageUtils
 import org.omnirom.omniota.model.RetrofitManager
 import java.text.DateFormat
+import java.text.SimpleDateFormat
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
@@ -102,11 +103,13 @@ class MainActivity : ComponentActivity() {
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
-        localDateTimeFormat =
-            DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.LONG, Locale.getDefault())
+        val use24Hour = android.text.format.DateFormat.is24HourFormat(this)
+        val dateTimePattern = if (use24Hour) "MMM dd, yyyy H:m z" else "MMM dd, yyyy h:m a z"
+        localDateTimeFormat = SimpleDateFormat(dateTimePattern, Locale.getDefault())
         localDateTimeFormat.timeZone = TimeZone.getTimeZone("UTC")
-        localDateFormat =
-            DateFormat.getDateInstance(DateFormat.MEDIUM, Locale.getDefault())
+
+        val datePattern = "MMM dd, yyyy"
+        localDateFormat = SimpleDateFormat(datePattern, Locale.getDefault())
         localDateFormat.timeZone = TimeZone.getTimeZone("UTC")
 
         lifecycleScope.launch {
@@ -223,7 +226,7 @@ class MainActivity : ComponentActivity() {
                                     topStart = 28.dp
                                 ),
                                 backgroundColor = MaterialTheme.colorScheme.background,
-                                sheetGesturesEnabled = false
+                                sheetGesturesEnabled = true
                             )
                             {
                                 BoxWithConstraints {
@@ -503,9 +506,10 @@ class MainActivity : ComponentActivity() {
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // drag handle
                     Box(
                         modifier = Modifier
-                            .width(48.dp)
+                            .width(32.dp)
                             .height(4.dp)
                             .pointerInput(Unit) {
                                 detectVerticalDragGestures(onDragEnd = {
