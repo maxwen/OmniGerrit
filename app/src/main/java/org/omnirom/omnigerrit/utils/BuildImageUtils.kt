@@ -60,14 +60,18 @@ object BuildImageUtils {
             RetrofitManager.getOtaInstance().create(OmniOtaApi::class.java)
         try {
             val reponse = omniOtaApi.getBuilds()
-            if (reponse.isSuccessful && reponse.body() != null) {
-                val buildList = reponse.body()!!
-                if (buildList.containsKey(device)) {
-                    val deviceBuilds = buildList[device]!!.filter { image ->
-                        image.getBuildType() == buildType && image.getVersion() == version
+            if (reponse.isSuccessful) {
+                if (reponse.body() != null) {
+                    val buildList = reponse.body()!!
+                    if (buildList.containsKey(device)) {
+                        val deviceBuilds = buildList[device]!!.filter { image ->
+                            image.getBuildType() == buildType && image.getVersion() == version
+                        }
+                        return deviceBuilds
                     }
-                    return deviceBuilds
                 }
+            } else {
+                LogUtils.e(TAG, "getDeviceBuilds error = ", reponse.code())
             }
         } catch (e: Exception) {
             LogUtils.e(TAG, "getDeviceBuilds", e)
