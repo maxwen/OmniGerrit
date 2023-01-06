@@ -116,23 +116,30 @@ class MainViewModel() : ViewModel() {
     fun loadChange(change: Change) {
         if (isConnected.value) {
             viewModelScope.launch {
-                //_changeDetail.value = null
-                val changes = gerritApi.getChanges(
-                    params = change.id,
-                    options = listOf("CURRENT_REVISION", "DETAILED_ACCOUNTS")
-                )
-                if (changes.isSuccessful && changes.body() != null) {
-                    val changeList = changes.body()!!
-                    if (changeList.size == 1) {
-                        val changeDetail = changeList.first()
-                        val commit =
-                            gerritApi.getCommit(changeDetail.id, changeDetail.current_revision)
-                        if (commit.isSuccessful && commit.body() != null) {
-                            changeDetail.commit = commit.body()
+                if (change.isBuildChange()) {
+                    _changeDetail.value = change
+                } else {
+                    //_changeDetail.value = null
+                    val changes = gerritApi.getChanges(
+                        params = change.id,
+                        options = listOf("CURRENT_REVISION", "DETAILED_ACCOUNTS")
+                    )
+                    if (changes.isSuccessful && changes.body() != null) {
+                        val changeList = changes.body()!!
+                        if (changeList.size == 1) {
+                            val changeDetail = changeList.first()
+                            val commit =
+                                gerritApi.getCommit(changeDetail.id, changeDetail.current_revision)
+                            if (commit.isSuccessful && commit.body() != null) {
+                                changeDetail.commit = commit.body()
+                            }
+                            _changeDetail.value = changeDetail
+                            LogUtils.d(
+                                TAG,
+                                "changeDetail = " + this@MainViewModel.changeDetail.value
+                            )
+                            return@launch
                         }
-                        _changeDetail.value = changeDetail
-                        LogUtils.d(TAG, "changeDetail = " + this@MainViewModel.changeDetail.value)
-                        return@launch
                     }
                 }
             }

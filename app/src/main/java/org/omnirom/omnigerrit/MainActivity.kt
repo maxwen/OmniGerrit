@@ -6,10 +6,12 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
+import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.appcompat.view.ContextThemeWrapper
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
@@ -40,6 +42,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -48,6 +51,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -162,7 +166,12 @@ class MainActivity : ComponentActivity() {
                             TopAppBar(
                                 colors = TopAppBarDefaults.smallTopAppBarColors(containerColor = topAppBarColor),
                                 title = {
-                                    Column(modifier = Modifier.padding(end = 14.dp, bottom = 8.dp)) {
+                                    Column(
+                                        modifier = Modifier.padding(
+                                            end = 14.dp,
+                                            bottom = 8.dp
+                                        )
+                                    ) {
                                         OutlinedTextField(
                                             value = queryString.value,
                                             onValueChange = {
@@ -226,7 +235,7 @@ class MainActivity : ComponentActivity() {
                                     topStart = 28.dp
                                 ),
                                 backgroundColor = MaterialTheme.colorScheme.background,
-                                sheetGesturesEnabled = true
+                                sheetGesturesEnabled = false
                             )
                             {
                                 BoxWithConstraints {
@@ -311,25 +320,21 @@ class MainActivity : ComponentActivity() {
                 .background(bgColor, shape = RoundedCornerShape(size = 8.dp))
                 .heightIn(min = 88.dp)
                 .combinedClickable(onClick = {
-                    if (!change.isBuildChange()) {
-                        coroutineScope.launch {
-                            // scroll up if behind bottom sheet
-                            if (bottomSheetScaffoldState.bottomSheetState.isCollapsed) {
-                                if (isLandscapeSpacing()) {
-                                    changesListState.animateScrollToItem(0)
-                                } else {
-                                    val vsisibleItems =
-                                        changesListState.layoutInfo.viewportSize.height / changesListState.layoutInfo.visibleItemsInfo[0].size
-                                    if (index - changesListState.firstVisibleItemIndex > vsisibleItems / 2) {
-                                        changesListState.animateScrollToItem(0.coerceAtLeast(index - vsisibleItems / 2))
-                                    }
-                                }
+                    coroutineScope.launch {
+                        // scroll up if behind bottom sheet
+                        if (isLandscapeSpacing()) {
+                            changesListState.animateScrollToItem(0)
+                        } else {
+                            val visibleItems =
+                                (changesListState.layoutInfo.viewportSize.height / changesListState.layoutInfo.visibleItemsInfo[0].size) - 1
+                            if (index - changesListState.firstVisibleItemIndex > visibleItems / 2) {
+                                changesListState.animateScrollToItem(0.coerceAtLeast(index - visibleItems / 2))
                             }
-                            updateBottomSheetState(BottomSheetValue.Expanded)
-                            changeDetailScrollState.scrollTo(0)
                         }
-                        viewModel.loadChange(change)
+                        updateBottomSheetState(BottomSheetValue.Expanded)
+                        changeDetailScrollState.scrollTo(0)
                     }
+                    viewModel.loadChange(change)
                 }, onLongClick = {
                     itemMenuExpanded = true
                 }),
@@ -468,7 +473,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-    @OptIn(ExperimentalFoundationApi::class)
+    @OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
     @Composable
     fun ChangeDetails() {
         val coroutineScope = rememberCoroutineScope()
@@ -507,12 +512,19 @@ class MainActivity : ComponentActivity() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // drag handle
+                    var handleDragged by remember { mutableStateOf(false) }
+
+                    val handleWidth by animateDpAsState(
+                        if (handleDragged) 16.dp else 48.dp
+                    )
+
                     Box(
                         modifier = Modifier
-                            .width(32.dp)
+                            .width(handleWidth)
                             .height(4.dp)
                             .pointerInput(Unit) {
                                 detectVerticalDragGestures(onDragEnd = {
+                                    handleDragged = false
                                     coroutineScope.launch {
                                         if (bottomSheetScaffoldState.currentFraction < 0.5) {
                                             forceUpdateBottomSheetState(BottomSheetValue.Collapsed)
@@ -523,6 +535,18 @@ class MainActivity : ComponentActivity() {
                                 }) { _, dragAmount ->
                                     bottomSheetScaffoldState.bottomSheetState.performDrag(dragAmount)
                                 }
+                            }
+                            .pointerInteropFilter {
+                                when (it.action) {
+                                    MotionEvent.ACTION_DOWN -> {
+                                        handleDragged = true
+                                    }
+                                    MotionEvent.ACTION_UP -> {
+                                        handleDragged = false
+                                    }
+                                    else -> false
+                                }
+                                true
                             }
                             .clip(shape = RoundedCornerShape(2.dp))
                             .background(MaterialTheme.colorScheme.onSurfaceVariant)
@@ -537,115 +561,167 @@ class MainActivity : ComponentActivity() {
                             .fillMaxWidth()
                             .weight(1f, true)
                     ) {
-                        TabRow(
-                            containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(
-                                3.dp
-                            ),
-                            contentColor = MaterialTheme.colorScheme.onSurface,
-                            selectedTabIndex = selectedTab,
-                            divider = {},
-                            indicator = { tabPositions ->
-                                Box(
-                                    Modifier
-                                        .tabIndicatorOffset(tabPositions[selectedTab])
-                                        .padding(5.dp)
-                                        .fillMaxSize()
-                                        .border(
-                                            BorderStroke(
-                                                1.dp,
-                                                MaterialTheme.colorScheme.outline
-                                            ), RoundedCornerShape(20.dp)
-                                        )
-                                )
-                            }
-                        ) {
-                            Tab(
-                                selected = false,
-                                text = {
-                                    Text(
-                                        text = "Message",
-                                        style = MaterialTheme.typography.titleSmall
+                        if (change.isBuildChange()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f, true),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Button(onClick = {
+                                    showOtaBuildDirInBrowser()
+                                }) {
+                                    Icon(
+                                        painterResource(id = R.drawable.ic_web),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimary,
                                     )
-                                },
-                                onClick = { selectedTab = 0 })
-                            Tab(
-                                selected = false,
-                                text = {
                                     Text(
-                                        text = "Details",
-                                        style = MaterialTheme.typography.titleSmall
+                                        text = "Show",
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier
+                                            .padding(start = 14.dp),
                                     )
-                                },
-                                onClick = { selectedTab = 1 })
-                            Tab(
-                                selected = false,
-                                text = {
-                                    Text(
-                                        text = "More",
-                                        style = MaterialTheme.typography.titleSmall
-                                    )
-                                },
-                                onClick = { selectedTab = 2 })
-                        }
-                        when (selectedTab) {
-                            0 -> {
-                                Column(
-                                    modifier = Modifier
-                                        .verticalScroll(state = changeDetailScrollState)
-                                        .padding(top = 4.dp)
-                                        .fillMaxWidth()
-                                ) {
-                                    Row() {
-                                        Text(
-                                            text = message,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                        )
-                                    }
                                 }
                             }
-                            1 -> {
-                                Column(
-                                    modifier = Modifier
-                                        .verticalScroll(state = changeDetailScrollState)
-                                        .padding(top = 4.dp)
-                                        .fillMaxWidth()
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
+                        } else {
+                            TabRow(
+                                containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(
+                                    3.dp
+                                ),
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                                selectedTabIndex = selectedTab,
+                                divider = {},
+                                indicator = { tabPositions ->
+                                    Box(
+                                        Modifier
+                                            .tabIndicatorOffset(tabPositions[selectedTab])
+                                            .padding(5.dp)
+                                            .fillMaxSize()
+                                            .border(
+                                                BorderStroke(
+                                                    1.dp,
+                                                    MaterialTheme.colorScheme.outline
+                                                ), RoundedCornerShape(20.dp)
+                                            )
+                                    )
+                                }
+                            ) {
+                                Tab(
+                                    selected = false,
+                                    text = {
+                                        Text(
+                                            text = "Message",
+                                            style = MaterialTheme.typography.titleSmall
+                                        )
+                                    },
+                                    onClick = { selectedTab = 0 })
+                                Tab(
+                                    selected = false,
+                                    text = {
+                                        Text(
+                                            text = "Details",
+                                            style = MaterialTheme.typography.titleSmall
+                                        )
+                                    },
+                                    onClick = { selectedTab = 1 })
+                                Tab(
+                                    selected = false,
+                                    text = {
+                                        Text(
+                                            text = "More",
+                                            style = MaterialTheme.typography.titleSmall
+                                        )
+                                    },
+                                    onClick = { selectedTab = 2 })
+                            }
+                            when (selectedTab) {
+                                0 -> {
+                                    Column(
+                                        modifier = Modifier
+                                            .verticalScroll(state = changeDetailScrollState)
+                                            .padding(top = 4.dp)
+                                            .fillMaxWidth()
                                     ) {
-                                        Text(
-                                            text = "Project:",
-                                            style = MaterialTheme.typography.titleMedium
-                                        )
-                                        Text(
-                                            text = change.project,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.padding(start = 4.dp)
-                                        )
-                                    }
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = "Branch:",
-                                            style = MaterialTheme.typography.titleMedium
-                                        )
-                                        Text(
-                                            text = change.branch,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.padding(start = 4.dp)
-                                        )
-                                    }
-                                    if (!change.owner.name.isNullOrEmpty()) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Row() {
                                             Text(
-                                                text = "Owner:",
+                                                text = message,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                            )
+                                        }
+                                    }
+                                }
+                                1 -> {
+                                    Column(
+                                        modifier = Modifier
+                                            .verticalScroll(state = changeDetailScrollState)
+                                            .padding(top = 4.dp)
+                                            .fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Text(
+                                                text = "Project:",
                                                 style = MaterialTheme.typography.titleMedium
                                             )
                                             Text(
-                                                text = change.owner.name,
+                                                text = change.project,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.padding(start = 4.dp)
+                                            )
+                                        }
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = "Branch:",
+                                                style = MaterialTheme.typography.titleMedium
+                                            )
+                                            Text(
+                                                text = change.branch,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.padding(start = 4.dp)
+                                            )
+                                        }
+                                        if (!change.owner.name.isNullOrEmpty()) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = "Owner:",
+                                                    style = MaterialTheme.typography.titleMedium
+                                                )
+                                                Text(
+                                                    text = change.owner.name,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    modifier = Modifier.padding(start = 4.dp)
+                                                )
+                                            }
+                                        }
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = "Updated:",
+                                                style = MaterialTheme.typography.titleMedium
+                                            )
+                                            Text(
+                                                text = localDateTimeFormat.format(change.updatedInMillis),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.padding(start = 4.dp)
+                                            )
+                                        }
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = "Number:",
+                                                style = MaterialTheme.typography.titleMedium
+                                            )
+                                            Text(
+                                                text = change._number,
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
@@ -653,59 +729,33 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
                                     }
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = "Updated:",
-                                            style = MaterialTheme.typography.titleMedium
-                                        )
-                                        Text(
-                                            text = localDateTimeFormat.format(change.updatedInMillis),
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.padding(start = 4.dp)
-                                        )
-                                    }
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = "Number:",
-                                            style = MaterialTheme.typography.titleMedium
-                                        )
-                                        Text(
-                                            text = change._number,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.padding(start = 4.dp)
-                                        )
-                                    }
                                 }
-                            }
-                            2 -> {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 4.dp)
-                                        .weight(1f, true),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Button(onClick = {
-                                        if (number.isNotEmpty()) {
-                                            showChangeInGerrit(number)
+                                2 -> {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 4.dp)
+                                            .weight(1f, true),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Button(onClick = {
+                                            if (number.isNotEmpty()) {
+                                                showChangeInGerrit(number)
+                                            }
+                                        }) {
+                                            Icon(
+                                                painterResource(id = R.drawable.ic_web),
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onPrimary,
+                                            )
+                                            Text(
+                                                text = "Show",
+                                                color = MaterialTheme.colorScheme.onPrimary,
+                                                modifier = Modifier
+                                                    .padding(start = 14.dp),
+                                            )
                                         }
-                                    }) {
-                                        Icon(
-                                            painterResource(id = R.drawable.ic_web),
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onPrimary,
-                                        )
-                                        Text(
-                                            text = "Show",
-                                            color = MaterialTheme.colorScheme.onPrimary,
-                                            modifier = Modifier
-                                                .padding(start = 14.dp),
-                                        )
                                     }
                                 }
                             }
