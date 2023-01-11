@@ -70,7 +70,7 @@ fun OmniGerritTheme(
             ViewCompat.getWindowInsetsController(view)?.isAppearanceLightStatusBars = !darkTheme
         }
         val td = ActivityManager.TaskDescription.Builder()
-            .setPrimaryColor(colorScheme.primary.toArgb()).build()
+            .setPrimaryColor(colorScheme.background.toArgb()).build()
         (view.context as Activity).setTaskDescription(td)
     }
 
