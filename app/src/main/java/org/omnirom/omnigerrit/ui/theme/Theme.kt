@@ -55,9 +55,10 @@ fun OmniGerritTheme(
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context).copy(
-                primary = Color(context.resources.getColor(android.R.color.system_accent1_100, context.theme))
-            ) else dynamicLightColorScheme(context)
+            if (darkTheme) dynamicDarkColorScheme(context)
+                /*.copy(
+                primary = Color(context.resources.getColor(android.R.color.system_accent1_100, context.theme)))*/
+            else dynamicLightColorScheme(context)
         }
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
