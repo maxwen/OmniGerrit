@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
@@ -56,6 +57,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
@@ -143,105 +145,111 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            OmniGerritTheme {
-                val bottomSheetValue by rememberSaveable { bottomSheetValue }
+            Main()
+        }
+    }
 
-                bottomSheetScaffoldState = rememberBottomSheetScaffoldState(
-                    bottomSheetState = BottomSheetState(initialValue = bottomSheetValue)
+    @Composable
+    fun Main() {
+        OmniGerritTheme {
+            val bottomSheetValue by rememberSaveable { bottomSheetValue }
+
+            bottomSheetScaffoldState = rememberBottomSheetScaffoldState(
+                bottomSheetState = BottomSheetState(initialValue = bottomSheetValue)
+            )
+            changeDetail = viewModel.changeDetail.collectAsState()
+            changesPager = viewModel.changesPager.collectAsLazyPagingItems()
+            changesListState = rememberLazyListState()
+            val queryString = viewModel.queryString.collectAsState()
+            val topAppBarColor =
+                if (changesListState.firstVisibleItemIndex != 0 || changesListState.isScrollInProgress) MaterialTheme.colorScheme.surfaceColorAtElevation(
+                    elevation = 3.dp
+                ) else MaterialTheme.colorScheme.surface
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.background
+            ) {
+                Scaffold(
+                    topBar = {
+                        TopAppBar(
+                            colors = TopAppBarDefaults.smallTopAppBarColors(containerColor = topAppBarColor),
+                            title = {
+                                Column(
+                                    modifier = Modifier.padding(
+                                        end = 14.dp,
+                                        bottom = 8.dp
+                                    )
+                                ) {
+                                    OutlinedTextField(
+                                        value = queryString.value,
+                                        onValueChange = {
+                                            viewModel.setQueryString(it)
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth(),
+                                        textStyle = MaterialTheme.typography.bodyMedium,
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Outlined.Search,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        placeholder = {
+                                            Text(
+                                                text = "Enter word to match",
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                        },
+                                        maxLines = 1,
+                                        colors = TextFieldDefaults.textFieldColors(
+                                            containerColor = topAppBarColor,
+                                            unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
+                                        ),
+                                        shape = RoundedCornerShape(20.dp)
+                                    )
+                                }
+                            },
+                        )
+                    },
+                    bottomBar = {
+                        BottomAppBar(
+                            actions = {
+                                BottomAppBarContents()
+                            },
+                            floatingActionButton = {
+                                FloatingActionButton(onClick = {
+                                    viewModel.reload()
+                                }, containerColor = MaterialTheme.colorScheme.primary) {
+                                    Icon(
+                                        Icons.Outlined.Refresh,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                }
+                            })
+                    },
+                    snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
                 )
-                changeDetail = viewModel.changeDetail.collectAsState()
-                changesPager = viewModel.changesPager.collectAsLazyPagingItems()
-                changesListState = rememberLazyListState()
-                val queryString = viewModel.queryString.collectAsState()
-                val topAppBarColor =
-                    if (changesListState.firstVisibleItemIndex != 0 || changesListState.isScrollInProgress) MaterialTheme.colorScheme.surfaceColorAtElevation(
-                        elevation = 3.dp
-                    ) else MaterialTheme.colorScheme.surface
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    Scaffold(
-                        topBar = {
-                            TopAppBar(
-                                colors = TopAppBarDefaults.smallTopAppBarColors(containerColor = topAppBarColor),
-                                title = {
-                                    Column(
-                                        modifier = Modifier.padding(
-                                            end = 14.dp,
-                                            bottom = 8.dp
-                                        )
-                                    ) {
-                                        OutlinedTextField(
-                                            value = queryString.value,
-                                            onValueChange = {
-                                                viewModel.setQueryString(it)
-                                            },
-                                            modifier = Modifier
-                                                .fillMaxWidth(),
-                                            textStyle = MaterialTheme.typography.bodyMedium,
-                                            leadingIcon = {
-                                                Icon(
-                                                    Icons.Outlined.Search,
-                                                    contentDescription = null
-                                                )
-                                            },
-                                            placeholder = {
-                                                Text(
-                                                    text = "Enter word to match",
-                                                    style = MaterialTheme.typography.bodyMedium
-                                                )
-                                            },
-                                            maxLines = 1,
-                                            colors = TextFieldDefaults.textFieldColors(
-                                                containerColor = topAppBarColor,
-                                                unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
-                                            ),
-                                            shape = RoundedCornerShape(20.dp)
-                                        )
-                                    }
-                                },
-                            )
-                        },
-                        bottomBar = {
-                            BottomAppBar(
-                                actions = {
-                                    BottomAppBarContents()
-                                },
-                                floatingActionButton = {
-                                    FloatingActionButton(onClick = {
-                                        viewModel.reload()
-                                    }, containerColor = MaterialTheme.colorScheme.primary) {
-                                        Icon(
-                                            Icons.Outlined.Refresh,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onPrimary
-                                        )
-                                    }
-                                })
-                        },
-                        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-                    )
-                    {
-                        Column(modifier = Modifier.padding(it)) {
-                            BottomSheetScaffold(
-                                scaffoldState = bottomSheetScaffoldState,
-                                sheetPeekHeight = 0.dp,
-                                sheetContent = {
-                                    ChangeDetails()
-                                },
-                                sheetShape = RoundedCornerShape(
-                                    topEnd = 28.dp,
-                                    topStart = 28.dp
-                                ),
-                                backgroundColor = MaterialTheme.colorScheme.background,
-                                sheetGesturesEnabled = false
-                            )
-                            {
-                                BoxWithConstraints {
-                                    Column() {
-                                        Changes()
-                                    }
+                {
+                    Column(modifier = Modifier.padding(it)) {
+                        BottomSheetScaffold(
+                            scaffoldState = bottomSheetScaffoldState,
+                            sheetPeekHeight = 0.dp,
+                            sheetContent = {
+                                ChangeDetails()
+                            },
+                            sheetShape = RoundedCornerShape(
+                                topEnd = 28.dp,
+                                topStart = 28.dp
+                            ),
+                            backgroundColor = MaterialTheme.colorScheme.background,
+
+                            sheetGesturesEnabled = true
+                        )
+                        {
+                            BoxWithConstraints {
+                                Column() {
+                                    Changes()
                                 }
                             }
                         }
@@ -544,7 +552,6 @@ class MainActivity : ComponentActivity() {
                                     MotionEvent.ACTION_UP -> {
                                         handleDragged = false
                                     }
-                                    else -> false
                                 }
                                 true
                             }
@@ -799,7 +806,7 @@ class MainActivity : ComponentActivity() {
         val month = c[Calendar.MONTH]
         val datePickerDialog = DatePickerDialog(
             ContextThemeWrapper(this, R.style.Theme_OmniGerrit_DatePickerDialog),
-            { view, year, monthOfYear, dayOfMonth ->
+            { _, year, monthOfYear, dayOfMonth ->
                 val c = Calendar.getInstance()
                 c.timeZone = TimeZone.getTimeZone("UTC")
                 c[Calendar.DAY_OF_MONTH] = dayOfMonth
@@ -883,53 +890,42 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier
                         .height(48.dp)
                         .fillMaxWidth()
-                        .background(color = MaterialTheme.colorScheme.primary)
-                        .padding(start = 14.dp),
+                        .clickable(onClick = {
+                            projectFilterExpanded = false
+                            viewModel.setProjectFilter(false)
+                        }),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val header = if (!projectFilter) {
-                        "All devices"
-                    } else {
-                        "Device " + BuildImageUtils.device
-                    }
-                    Text(
-                        text = header,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                }
-                Divider()
-                DropdownMenuItem(
-                    onClick = {
+                    Checkbox(checked = !projectFilter, onCheckedChange = {
                         projectFilterExpanded = false
                         viewModel.setProjectFilter(false)
-                    }, leadingIcon = {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_filter_off),
-                            contentDescription = "",
-                        )
-                    }, text = {
-                        Text(
-                            text = "Show all",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
                     })
-
-                DropdownMenuItem(
-                    onClick = {
+                    Text(
+                        text = "Show all",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(end = 12.dp)
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .height(48.dp)
+                        .fillMaxWidth()
+                        .clickable(onClick = {
+                            projectFilterExpanded = false
+                            viewModel.setProjectFilter(true)
+                        }),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(checked = projectFilter, onCheckedChange = {
                         projectFilterExpanded = false
                         viewModel.setProjectFilter(true)
-                    }, leadingIcon = {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_devices),
-                            contentDescription = "",
-                        )
-                    }, text = {
-                        Text(
-                            text = "Filter for " + BuildImageUtils.device,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
                     })
+                    Text(
+                        text = "Show device " + BuildImageUtils.device,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(end = 12.dp)
+                    )
+                }
             }
         }
         IconButton(
@@ -967,79 +963,106 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier
                         .height(48.dp)
                         .fillMaxWidth()
-                        .background(color = MaterialTheme.colorScheme.primary)
-                        .padding(start = 14.dp),
+                        .clickable(onClick = {
+                            queryDateAfterExpanded = false
+                            viewModel.setQueryDateAfter(0)
+                        }),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val header = if (queryDateAfter == 0L) {
-                        "All changes"
-                    } else {
-                        "Since " + localDateFormat.format(
-                            queryDateAfter
-                        )
-                    }
-                    Text(
-                        text = header,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                }
-                Divider()
-                DropdownMenuItem(
-                    onClick = {
+                    Checkbox(checked = queryDateAfter == 0L, onCheckedChange = {
                         queryDateAfterExpanded = false
                         viewModel.setQueryDateAfter(0)
-                    }, leadingIcon = {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_filter_off),
-                            contentDescription = "",
-                        )
-                    }, text = {
-                        Text(
-                            text = "Show all",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
                     })
+                    Text(
+                        text = "Show all",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(end = 12.dp)
+                    )
+                }
                 if (Device.getBuildDateInMillis(applicationContext) != 0L) {
-                    DropdownMenuItem(
-                        onClick = {
+                    Row(
+                        modifier = Modifier
+                            .height(48.dp)
+                            .fillMaxWidth()
+                            .clickable(onClick = {
+                                queryDateAfterExpanded = false
+                                viewModel.setQueryDateAfter(
+                                    Device.getBuildDateInMillis(
+                                        applicationContext
+                                    )
+                                )
+                            }),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(checked = queryDateAfter == Device.getBuildDateInMillis(
+                            applicationContext
+                        ), onCheckedChange = {
                             queryDateAfterExpanded = false
                             viewModel.setQueryDateAfter(
                                 Device.getBuildDateInMillis(
                                     applicationContext
                                 )
                             )
-                        }, leadingIcon = {
-                            Icon(
-                                painter = painterResource(id = R.drawable.show_since),
-                                contentDescription = "",
-                            )
-                        }, text = {
-                            Text(
-                                text = "Since this build " + localDateFormat.format(
-                                    Device.getBuildDateInMillis(
-                                        applicationContext
-                                    )
-                                ),
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
                         })
-                }
-                DropdownMenuItem(
-                    onClick = {
-                        queryDateAfterExpanded = false
-                        doSelectStartTime()
-                    }, leadingIcon = {
-                        Icon(
-                            painter = painterResource(id = R.drawable.show_since),
-                            contentDescription = "",
-                        )
-                    }, text = {
                         Text(
-                            text = "Select start date",
+                            text = "Since device build " + localDateFormat.format(
+                                Device.getBuildDateInMillis(
+                                    applicationContext
+                                ),
+                            ),
                             style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(end = 12.dp)
                         )
-                    })
+                    }
+                }
+                if (queryDateAfter != 0L && queryDateAfter != Device.getBuildDateInMillis(
+                        applicationContext
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .height(48.dp)
+                            .fillMaxWidth()
+                            .clickable(onClick = {
+                                queryDateAfterExpanded = false
+                                viewModel.setQueryDateAfter(queryDateAfter)
+                            }),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(checked = queryDateAfter != 0L && queryDateAfter != Device.getBuildDateInMillis(
+                            applicationContext
+                        ), onCheckedChange = {
+                            queryDateAfterExpanded = false
+                            viewModel.setQueryDateAfter(queryDateAfter)
+                        })
+                        Text(
+                            text = "Since " + localDateFormat.format(queryDateAfter),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(end = 12.dp)
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier
+                        .height(48.dp)
+                        .fillMaxWidth()
+                        .clickable(onClick = {
+                            queryDateAfterExpanded = false
+                            doSelectStartTime()
+                        }),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.show_since),
+                        contentDescription = "",
+                        modifier = Modifier.padding(end = 12.dp, start = 11.dp)
+                    )
+                    Text(
+                        text = "Select date",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(end = 12.dp)
+                    )
+                }
             }
         }
         IconButton(
@@ -1059,14 +1082,12 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier
                         .height(48.dp)
                         .fillMaxWidth()
-                        .background(color = MaterialTheme.colorScheme.primary)
                         .padding(start = 14.dp, end = 14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = "Branch " + queryBranch,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimary
                     )
                 }
             }
@@ -1088,14 +1109,12 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier
                         .height(48.dp)
                         .fillMaxWidth()
-                        .background(color = MaterialTheme.colorScheme.primary)
                         .padding(start = 14.dp, end = 14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = "Status " + viewModel.getQueryFilter().queryStatus.name,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimary
                     )
                 }
             }
