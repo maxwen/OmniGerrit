@@ -466,21 +466,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    @OptIn(ExperimentalMaterialApi::class)
-    val BottomSheetScaffoldState.currentFraction: Float
-        get() {
-            val fraction = bottomSheetState.progress.fraction
-            val targetValue = bottomSheetState.targetValue
-            val currentValue = bottomSheetState.currentValue
-
-            return when {
-                currentValue == BottomSheetValue.Collapsed && targetValue == BottomSheetValue.Collapsed -> 0f
-                currentValue == BottomSheetValue.Expanded && targetValue == BottomSheetValue.Expanded -> 1f
-                currentValue == BottomSheetValue.Collapsed && targetValue == BottomSheetValue.Expanded -> fraction
-                else -> 1f - fraction
-            }
-        }
-
     @OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
     @Composable
     fun ChangeDetails() {
@@ -520,41 +505,10 @@ class MainActivity : ComponentActivity() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // drag handle
-                    var handleDragged by remember { mutableStateOf(false) }
-
-                    val handleWidth by animateDpAsState(
-                        if (handleDragged) 16.dp else 48.dp
-                    )
-
                     Box(
                         modifier = Modifier
-                            .width(handleWidth)
+                            .width(48.dp)
                             .height(4.dp)
-                            .pointerInput(Unit) {
-                                detectVerticalDragGestures(onDragEnd = {
-                                    handleDragged = false
-                                    coroutineScope.launch {
-                                        if (bottomSheetScaffoldState.currentFraction < 0.5) {
-                                            forceUpdateBottomSheetState(BottomSheetValue.Collapsed)
-                                        } else {
-                                            forceUpdateBottomSheetState(BottomSheetValue.Expanded)
-                                        }
-                                    }
-                                }) { _, dragAmount ->
-                                    bottomSheetScaffoldState.bottomSheetState.performDrag(dragAmount)
-                                }
-                            }
-                            .pointerInteropFilter {
-                                when (it.action) {
-                                    MotionEvent.ACTION_DOWN -> {
-                                        handleDragged = true
-                                    }
-                                    MotionEvent.ACTION_UP -> {
-                                        handleDragged = false
-                                    }
-                                }
-                                true
-                            }
                             .clip(shape = RoundedCornerShape(2.dp))
                             .background(MaterialTheme.colorScheme.onSurfaceVariant)
                     )
@@ -832,15 +786,6 @@ class MainActivity : ComponentActivity() {
                 bottomSheetValue.value = bottomSheetState
             }
         }
-    }
-
-    private suspend fun forceUpdateBottomSheetState(bottomSheetState: BottomSheetValue) {
-        if (bottomSheetState == BottomSheetValue.Collapsed) {
-            bottomSheetScaffoldState.bottomSheetState.collapse()
-        } else {
-            bottomSheetScaffoldState.bottomSheetState.expand()
-        }
-        bottomSheetValue.value = bottomSheetState
     }
 
     @Composable
