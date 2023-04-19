@@ -89,12 +89,10 @@ class MainActivity : ComponentActivity() {
     private lateinit var changesListState: LazyListState
     private lateinit var changeDetail: State<Change?>
 
-    lateinit var bottomSheetScaffoldState: BottomSheetScaffoldState
     lateinit var localDateTimeFormat: DateFormat
     lateinit var localDateFormat: DateFormat
     private val snackbarHostState = SnackbarHostState()
     private val changeDetailScrollState = ScrollState(0)
-    private val bottomSheetValue = mutableStateOf(BottomSheetValue.Collapsed)
 
     private fun getAttrColor(attr: Int): Int {
         val ta = obtainStyledAttributes(intArrayOf(attr))
@@ -152,10 +150,8 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun Main() {
         OmniGerritTheme {
-            val bottomSheetValue by rememberSaveable { bottomSheetValue }
-
-            bottomSheetScaffoldState = rememberBottomSheetScaffoldState(
-                bottomSheetState = BottomSheetState(initialValue = bottomSheetValue)
+            val bottomSheetScaffoldState = rememberBottomSheetScaffoldState(
+                bottomSheetState = rememberBottomSheetState(initialValue = BottomSheetValue.Collapsed)
             )
             changeDetail = viewModel.changeDetail.collectAsState()
             changesPager = viewModel.changesPager.collectAsLazyPagingItems()
@@ -243,15 +239,9 @@ class MainActivity : ComponentActivity() {
                                 topStart = 28.dp
                             ),
                             backgroundColor = MaterialTheme.colorScheme.background,
-
-                            sheetGesturesEnabled = true
                         )
                         {
-                            BoxWithConstraints {
-                                Column() {
-                                    Changes()
-                                }
-                            }
+                            Changes(bottomSheetScaffoldState)
                         }
                     }
                 }
@@ -260,7 +250,7 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun Changes() {
+    fun Changes(bottomSheetScaffoldState: BottomSheetScaffoldState) {
         Column(modifier = Modifier.padding(start = 10.dp, end = 10.dp)) {
             val connected = viewModel.isConnected.collectAsState()
             val buildsMapLoaded = viewModel.buildsMapLoaded.collectAsState()
@@ -269,7 +259,7 @@ class MainActivity : ComponentActivity() {
                 LazyColumn(state = changesListState) {
                     itemsIndexed(items = changesPager!!) { index, change ->
                         val changeTime = change!!.updatedInMillis
-                        ChangeItem(index, change, changeTime)
+                        ChangeItem(index, change, changeTime, bottomSheetScaffoldState)
                     }
                     when {
                         changesPager!!.loadState.refresh is LoadState.Loading -> {
@@ -293,7 +283,7 @@ class MainActivity : ComponentActivity() {
                 // close bottom sheet
                 LaunchedEffect(key1 = connected, block = {
                     if (!connected.value) {
-                        updateBottomSheetState(BottomSheetValue.Collapsed)
+                        updateBottomSheetState(bottomSheetScaffoldState, BottomSheetValue.Collapsed)
                     }
                 })
             }
@@ -305,7 +295,8 @@ class MainActivity : ComponentActivity() {
     fun ChangeItem(
         index: Int,
         change: Change,
-        changeTime: Long
+        changeTime: Long,
+        bottomSheetScaffoldState: BottomSheetScaffoldState
     ) {
         val selected =
             changeDetail.value != null && changeDetail.value!!.id == change.id
@@ -339,7 +330,7 @@ class MainActivity : ComponentActivity() {
                                 changesListState.animateScrollToItem(0.coerceAtLeast(index - visibleItems / 2))
                             }
                         }
-                        updateBottomSheetState(BottomSheetValue.Expanded)
+                        updateBottomSheetState(bottomSheetScaffoldState, BottomSheetValue.Expanded)
                         changeDetailScrollState.scrollTo(0)
                     }
                     viewModel.loadChange(change)
@@ -469,8 +460,6 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
     @Composable
     fun ChangeDetails() {
-        val coroutineScope = rememberCoroutineScope()
-
         val nestedScrollConnection = remember {
             object : NestedScrollConnection {
                 override fun onPostScroll(
@@ -774,17 +763,11 @@ class MainActivity : ComponentActivity() {
         datePickerDialog.show()
     }
 
-    private suspend fun updateBottomSheetState(bottomSheetState: BottomSheetValue) {
+    private suspend fun updateBottomSheetState(bottomSheetScaffoldState: BottomSheetScaffoldState, bottomSheetState: BottomSheetValue) {
         if (bottomSheetState == BottomSheetValue.Collapsed) {
-            if (bottomSheetScaffoldState.bottomSheetState.isExpanded) {
-                bottomSheetScaffoldState.bottomSheetState.collapse()
-                bottomSheetValue.value = bottomSheetState
-            }
+            bottomSheetScaffoldState.bottomSheetState.collapse()
         } else {
-            if (bottomSheetScaffoldState.bottomSheetState.isCollapsed) {
-                bottomSheetScaffoldState.bottomSheetState.expand()
-                bottomSheetValue.value = bottomSheetState
-            }
+            bottomSheetScaffoldState.bottomSheetState.expand()
         }
     }
 
