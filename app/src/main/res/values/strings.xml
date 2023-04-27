@@ -1,3 +1,24 @@
 <resources>
     <string name="app_name">OmniGerrit</string>
+    <string name="search_hint_text">Enter word to match</string>
+    <string name="show_in_gerrit">Show in Gerrit</string>
+    <string name="show_available_builds">Show available builds</string>
+    <string name="show_since_this_change">Show since this change</string>
+    <string name="no_network_connection">No network connection</string>
+    <string name="tab_message_text">Message</string>
+    <string name="tab_details_text">Details</string>
+    <string name="tab_more_text">More</string>
+    <string name="details_project_title">Project\u003a</string>
+    <string name="details_branch_title">Branch\u003a</string>
+    <string name="details_owner_title">Owner\u003a</string>
+    <string name="details_updated_title">Updated\u003a</string>
+    <string name="details_number_title">Number\u003a</string>
+    <string name="button_show_title">Show</string>
+    <string name="filter_show_all">Show all</string>
+    <string name="filter_show_device">"Show device"</string>
+    <string name="filter_since_device_build">Since device build</string>
+    <string name="filter_since">Since</string>
+    <string name="filter_select_date">Select date</string>
+    <string name="filter_branch">Branch</string>
+    <string name="filter_status">Status</string>
 </resources>

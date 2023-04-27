@@ -54,6 +54,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -62,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.paging.LoadState
@@ -87,7 +89,6 @@ class MainActivity : ComponentActivity() {
     private val viewModel by viewModels<MainViewModel>()
     private var changesPager: LazyPagingItems<Change>? = null
     private lateinit var changesListState: LazyListState
-    private lateinit var changeDetail: State<Change?>
 
     lateinit var localDateTimeFormat: DateFormat
     lateinit var localDateFormat: DateFormat
@@ -153,10 +154,9 @@ class MainActivity : ComponentActivity() {
             val bottomSheetScaffoldState = rememberBottomSheetScaffoldState(
                 bottomSheetState = rememberBottomSheetState(initialValue = BottomSheetValue.Collapsed)
             )
-            changeDetail = viewModel.changeDetail.collectAsState()
             changesPager = viewModel.changesPager.collectAsLazyPagingItems()
             changesListState = rememberLazyListState()
-            val queryString = viewModel.queryString.collectAsState()
+            val queryString by viewModel.queryString.collectAsStateWithLifecycle()
             val topAppBarColor =
                 if (changesListState.firstVisibleItemIndex != 0 || changesListState.isScrollInProgress) MaterialTheme.colorScheme.surfaceColorAtElevation(
                     elevation = 3.dp
@@ -177,7 +177,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                 ) {
                                     OutlinedTextField(
-                                        value = queryString.value,
+                                        value = queryString,
                                         onValueChange = {
                                             viewModel.setQueryString(it)
                                         },
@@ -192,7 +192,7 @@ class MainActivity : ComponentActivity() {
                                         },
                                         placeholder = {
                                             Text(
-                                                text = "Enter word to match",
+                                                text = stringResource(R.string.search_hint_text),
                                                 style = MaterialTheme.typography.bodyMedium
                                             )
                                         },
@@ -252,10 +252,10 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun Changes(bottomSheetScaffoldState: BottomSheetScaffoldState) {
         Column(modifier = Modifier.padding(start = 10.dp, end = 10.dp)) {
-            val connected = viewModel.isConnected.collectAsState()
-            val buildsMapLoaded = viewModel.buildsMapLoaded.collectAsState()
+            val connected by viewModel.isConnected.collectAsStateWithLifecycle()
+            val buildsMapLoaded by viewModel.buildsMapLoaded.collectAsStateWithLifecycle()
 
-            if (connected.value) {
+            if (connected) {
                 LazyColumn(state = changesListState) {
                     itemsIndexed(items = changesPager!!) { index, change ->
                         val changeTime = change!!.updatedInMillis
@@ -272,7 +272,7 @@ class MainActivity : ComponentActivity() {
                         }
                         changesPager!!.loadState.append is LoadState.Error -> {
                         }
-                        !buildsMapLoaded.value -> {
+                        !buildsMapLoaded -> {
                             item { LoadingView(modifier = Modifier.fillParentMaxSize()) }
                         }
                     }
@@ -282,7 +282,7 @@ class MainActivity : ComponentActivity() {
 
                 // close bottom sheet
                 LaunchedEffect(key1 = connected, block = {
-                    if (!connected.value) {
+                    if (!connected) {
                         updateBottomSheetState(bottomSheetScaffoldState, BottomSheetValue.Collapsed)
                     }
                 })
@@ -298,8 +298,9 @@ class MainActivity : ComponentActivity() {
         changeTime: Long,
         bottomSheetScaffoldState: BottomSheetScaffoldState
     ) {
+        val changeDetail by viewModel.changeDetail.collectAsStateWithLifecycle()
         val selected =
-            changeDetail.value != null && changeDetail.value!!.id == change.id
+            changeDetail!= null && changeDetail!!.id == change.id
         val coroutineScope = rememberCoroutineScope()
         var bgColor = MaterialTheme.colorScheme.surfaceColorAtElevation(
             1.dp
@@ -404,9 +405,9 @@ class MainActivity : ComponentActivity() {
                     }, text = {
                         Text(
                             text = if (change._number.isNotEmpty()) {
-                                "Show in Gerrit"
+                                stringResource(R.string.show_in_gerrit)
                             } else {
-                                "Show available builds"
+                                stringResource(R.string.show_available_builds)
                             },
                             style = MaterialTheme.typography.bodyMedium,
                         )
@@ -417,7 +418,7 @@ class MainActivity : ComponentActivity() {
                         viewModel.setQueryDateAfter(change.updatedInMillis)
                     }, text = {
                         Text(
-                            text = "Show since this change",
+                            text = stringResource(R.string.show_since_this_change),
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     })
@@ -435,7 +436,7 @@ class MainActivity : ComponentActivity() {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "No network connection",
+                text = stringResource(R.string.no_network_connection),
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.align(Alignment.CenterHorizontally),
                 textAlign = TextAlign.Center,
@@ -457,7 +458,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    @OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
     @Composable
     fun ChangeDetails() {
         val nestedScrollConnection = remember {
@@ -471,7 +471,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-
+        val changeDetail by viewModel.changeDetail.collectAsStateWithLifecycle()
         var selectedTab by rememberSaveable { mutableStateOf<Int>(0) }
         Column(
             modifier = Modifier
@@ -502,8 +502,8 @@ class MainActivity : ComponentActivity() {
                             .background(MaterialTheme.colorScheme.onSurfaceVariant)
                     )
                 }
-                if (changeDetail.value != null) {
-                    val change = changeDetail.value!!
+                if (changeDetail != null) {
+                    val change = changeDetail!!
                     val message = change.commit?.trimmedMessage() ?: change.subject
                     val number = change._number
                     Column(
@@ -562,7 +562,7 @@ class MainActivity : ComponentActivity() {
                                     selected = false,
                                     text = {
                                         Text(
-                                            text = "Message",
+                                            text = stringResource(R.string.tab_message_text),
                                             style = MaterialTheme.typography.titleSmall
                                         )
                                     },
@@ -571,7 +571,7 @@ class MainActivity : ComponentActivity() {
                                     selected = false,
                                     text = {
                                         Text(
-                                            text = "Details",
+                                            text = stringResource(R.string.tab_details_text),
                                             style = MaterialTheme.typography.titleSmall
                                         )
                                     },
@@ -580,7 +580,7 @@ class MainActivity : ComponentActivity() {
                                     selected = false,
                                     text = {
                                         Text(
-                                            text = "More",
+                                            text = stringResource(R.string.tab_more_text),
                                             style = MaterialTheme.typography.titleSmall
                                         )
                                     },
@@ -613,7 +613,7 @@ class MainActivity : ComponentActivity() {
                                             verticalAlignment = Alignment.CenterVertically,
                                         ) {
                                             Text(
-                                                text = "Project:",
+                                                text = stringResource(R.string.details_project_title),
                                                 style = MaterialTheme.typography.titleMedium
                                             )
                                             Text(
@@ -626,7 +626,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(
-                                                text = "Branch:",
+                                                text = stringResource(R.string.details_branch_title),
                                                 style = MaterialTheme.typography.titleMedium
                                             )
                                             Text(
@@ -640,7 +640,7 @@ class MainActivity : ComponentActivity() {
                                         if (!change.owner.name.isNullOrEmpty()) {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
                                                 Text(
-                                                    text = "Owner:",
+                                                    text = stringResource(R.string.details_owner_title),
                                                     style = MaterialTheme.typography.titleMedium
                                                 )
                                                 Text(
@@ -654,7 +654,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(
-                                                text = "Updated:",
+                                                text = stringResource(R.string.details_updated_title),
                                                 style = MaterialTheme.typography.titleMedium
                                             )
                                             Text(
@@ -667,7 +667,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(
-                                                text = "Number:",
+                                                text = stringResource(R.string.details_number_title),
                                                 style = MaterialTheme.typography.titleMedium
                                             )
                                             Text(
@@ -700,7 +700,7 @@ class MainActivity : ComponentActivity() {
                                                 tint = MaterialTheme.colorScheme.onPrimary,
                                             )
                                             Text(
-                                                text = "Show",
+                                                text = stringResource(R.string.button_show_title),
                                                 color = MaterialTheme.colorScheme.onPrimary,
                                                 modifier = Modifier
                                                     .padding(start = 14.dp),
@@ -773,11 +773,11 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun BottomAppBarContents() {
-        val projectFilter by viewModel.projectFilter.collectAsState()
+        val projectFilter by viewModel.projectFilter.collectAsStateWithLifecycle()
         var queryDateAfterExpanded by remember { mutableStateOf(false) }
-        val queryDateAfter by viewModel.queryDateAfter.collectAsState()
+        val queryDateAfter by viewModel.queryDateAfter.collectAsStateWithLifecycle()
         var projectFilterExpanded by remember { mutableStateOf(false) }
-        val queryBranch by viewModel.queryBranch.collectAsState()
+        val queryBranch by viewModel.queryBranch.collectAsStateWithLifecycle()
         var queryBranchExpanded by remember { mutableStateOf(false) }
         var queryStatusExpanded by remember { mutableStateOf(false) }
 
@@ -829,7 +829,7 @@ class MainActivity : ComponentActivity() {
                         viewModel.setProjectFilter(false)
                     })
                     Text(
-                        text = "Show all",
+                        text = stringResource(R.string.filter_show_all),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(end = 12.dp)
                     )
@@ -849,7 +849,7 @@ class MainActivity : ComponentActivity() {
                         viewModel.setProjectFilter(true)
                     })
                     Text(
-                        text = "Show device " + BuildImageUtils.device,
+                        text = stringResource(R.string.filter_show_device) + " " +  BuildImageUtils.device,
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(end = 12.dp)
                     )
@@ -902,7 +902,7 @@ class MainActivity : ComponentActivity() {
                         viewModel.setQueryDateAfter(0)
                     })
                     Text(
-                        text = "Show all",
+                        text = stringResource(id = R.string.filter_show_all),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(end = 12.dp)
                     )
@@ -933,7 +933,7 @@ class MainActivity : ComponentActivity() {
                             )
                         })
                         Text(
-                            text = "Since device build " + localDateFormat.format(
+                            text = stringResource(R.string.filter_since_device_build) + " " + localDateFormat.format(
                                 Device.getBuildDateInMillis(
                                     applicationContext
                                 ),
@@ -964,7 +964,7 @@ class MainActivity : ComponentActivity() {
                             viewModel.setQueryDateAfter(queryDateAfter)
                         })
                         Text(
-                            text = "Since " + localDateFormat.format(queryDateAfter),
+                            text = stringResource(R.string.filter_since) + " " + localDateFormat.format(queryDateAfter),
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(end = 12.dp)
                         )
@@ -986,7 +986,7 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(end = 12.dp, start = 11.dp)
                     )
                     Text(
-                        text = "Select date",
+                        text = stringResource(R.string.filter_select_date),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(end = 12.dp)
                     )
@@ -1014,7 +1014,7 @@ class MainActivity : ComponentActivity() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Branch " + queryBranch,
+                        text = stringResource(R.string.filter_branch) + " " + queryBranch,
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
@@ -1041,7 +1041,7 @@ class MainActivity : ComponentActivity() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Status " + viewModel.getQueryFilter().queryStatus.name,
+                        text = stringResource(R.string.filter_status) + " " + viewModel.getQueryFilter().queryStatus.name,
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
