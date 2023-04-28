@@ -133,6 +133,9 @@ class MainViewModel() : ViewModel() {
                             if (commit.isSuccessful && commit.body() != null) {
                                 changeDetail.commit = commit.body()
                             }
+                            val topic = gerritApi.getChangeTopic(changeDetail.id)
+                            changeDetail.topic = topic.body()
+
                             _changeDetail.value = changeDetail
                             LogUtils.d(
                                 TAG,

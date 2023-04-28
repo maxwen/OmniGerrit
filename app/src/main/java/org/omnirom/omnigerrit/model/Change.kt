@@ -26,6 +26,7 @@ data class Change(
     val updated: String = "",
     val _number: String = "",
     val current_revision: String = "",
+    var topic: String? = null,
     var commit: CommitInfo? = null,
     val owner: Owner = Owner("", -1)
 ) {

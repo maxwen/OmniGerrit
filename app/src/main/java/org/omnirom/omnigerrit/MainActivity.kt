@@ -53,6 +53,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -159,7 +160,7 @@ class MainActivity : ComponentActivity() {
             val queryString by viewModel.queryString.collectAsStateWithLifecycle()
             val topAppBarColor =
                 if (changesListState.firstVisibleItemIndex != 0 || changesListState.isScrollInProgress) MaterialTheme.colorScheme.surfaceColorAtElevation(
-                    elevation = 3.dp
+                    elevation = 8.dp
                 ) else MaterialTheme.colorScheme.surface
             Surface(
                 modifier = Modifier.fillMaxSize(),
@@ -187,7 +188,8 @@ class MainActivity : ComponentActivity() {
                                         leadingIcon = {
                                             Icon(
                                                 Icons.Outlined.Search,
-                                                contentDescription = null
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSecondaryContainer
                                             )
                                         },
                                         placeholder = {
@@ -198,8 +200,9 @@ class MainActivity : ComponentActivity() {
                                         },
                                         maxLines = 1,
                                         colors = TextFieldDefaults.textFieldColors(
-                                            containerColor = topAppBarColor,
-                                            unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                            unfocusedIndicatorColor = MaterialTheme.colorScheme.outline,
+                                            placeholderColor = MaterialTheme.colorScheme.onSecondaryContainer
                                         ),
                                         shape = RoundedCornerShape(20.dp)
                                     )
@@ -265,13 +268,17 @@ class MainActivity : ComponentActivity() {
                         changesPager!!.loadState.refresh is LoadState.Loading -> {
                             item { LoadingView(modifier = Modifier.fillParentMaxSize()) }
                         }
+
                         changesPager!!.loadState.append is LoadState.Loading -> {
                             item { LoadingView(modifier = Modifier.fillParentMaxSize()) }
                         }
+
                         changesPager!!.loadState.refresh is LoadState.Error -> {
                         }
+
                         changesPager!!.loadState.append is LoadState.Error -> {
                         }
+
                         !buildsMapLoaded -> {
                             item { LoadingView(modifier = Modifier.fillParentMaxSize()) }
                         }
@@ -300,7 +307,7 @@ class MainActivity : ComponentActivity() {
     ) {
         val changeDetail by viewModel.changeDetail.collectAsStateWithLifecycle()
         val selected =
-            changeDetail!= null && changeDetail!!.id == change.id
+            changeDetail != null && changeDetail!!.id == change.id
         val coroutineScope = rememberCoroutineScope()
         var bgColor = MaterialTheme.colorScheme.surfaceColorAtElevation(
             1.dp
@@ -481,7 +488,7 @@ class MainActivity : ComponentActivity() {
                         3.dp
                     )
                 )
-                .height(height = if (isLandscapeSpacing()) 140.dp else 220.dp)
+                .height(height = if (isLandscapeSpacing()) 140.dp else 240.dp)
                 .padding(start = 14.dp, end = 14.dp)
         ) {
             Column() {
@@ -602,6 +609,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 }
+
                                 1 -> {
                                     Column(
                                         modifier = Modifier
@@ -619,9 +627,13 @@ class MainActivity : ComponentActivity() {
                                             Text(
                                                 text = change.project,
                                                 style = MaterialTheme.typography.bodyMedium,
-                                                maxLines = 1,
+                                                maxLines = 2,
                                                 overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.padding(start = 4.dp)
+                                                modifier = Modifier.padding(
+                                                    start = dimensionResource(
+                                                        id = R.dimen.details_start_padding
+                                                    )
+                                                )
                                             )
                                         }
                                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -634,7 +646,9 @@ class MainActivity : ComponentActivity() {
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.padding(start = 4.dp)
+                                                modifier = Modifier.padding(start = dimensionResource(
+                                                    id = R.dimen.details_start_padding
+                                                ))
                                             )
                                         }
                                         if (!change.owner.name.isNullOrEmpty()) {
@@ -648,7 +662,9 @@ class MainActivity : ComponentActivity() {
                                                     style = MaterialTheme.typography.bodyMedium,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis,
-                                                    modifier = Modifier.padding(start = 4.dp)
+                                                    modifier = Modifier.padding(start = dimensionResource(
+                                                        id = R.dimen.details_start_padding
+                                                    ))
                                                 )
                                             }
                                         }
@@ -662,7 +678,9 @@ class MainActivity : ComponentActivity() {
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.padding(start = 4.dp)
+                                                modifier = Modifier.padding(start = dimensionResource(
+                                                    id = R.dimen.details_start_padding
+                                                ))
                                             )
                                         }
                                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -675,11 +693,29 @@ class MainActivity : ComponentActivity() {
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.padding(start = 4.dp)
+                                                modifier = Modifier.padding(start = dimensionResource(
+                                                    id = R.dimen.details_start_padding
+                                                ))
+                                            )
+                                        }
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = stringResource(R.string.details_topic_title),
+                                                style = MaterialTheme.typography.titleMedium
+                                            )
+                                            Text(
+                                                text = change.topic ?: "",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.padding(start = dimensionResource(
+                                                    id = R.dimen.details_start_padding
+                                                ))
                                             )
                                         }
                                     }
                                 }
+
                                 2 -> {
                                     Row(
                                         modifier = Modifier
@@ -740,30 +776,33 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun doSelectStartTime() {
-        val c = Calendar.getInstance()
+        var c = Calendar.getInstance()
         if (viewModel.queryDateAfter.value != 0L) {
             c.timeInMillis = viewModel.queryDateAfter.value
         }
-        val day = c[Calendar.DAY_OF_MONTH]
-        val year = c[Calendar.YEAR]
-        val month = c[Calendar.MONTH]
+        val d = c[Calendar.DAY_OF_MONTH]
+        val y = c[Calendar.YEAR]
+        val m = c[Calendar.MONTH]
         val datePickerDialog = DatePickerDialog(
             ContextThemeWrapper(this, R.style.Theme_OmniGerrit_DatePickerDialog),
-            { _, year, monthOfYear, dayOfMonth ->
-                val c = Calendar.getInstance()
+            { _, year, month, day ->
+                c = Calendar.getInstance()
                 c.timeZone = TimeZone.getTimeZone("UTC")
-                c[Calendar.DAY_OF_MONTH] = dayOfMonth
+                c[Calendar.DAY_OF_MONTH] = day
                 c[Calendar.YEAR] = year
-                c[Calendar.MONTH] = monthOfYear
+                c[Calendar.MONTH] = month
                 c[Calendar.HOUR_OF_DAY] = 0
                 c[Calendar.MINUTE] = 0
                 viewModel.setQueryDateAfter(c.timeInMillis)
-            }, year, month, day
+            }, y, m, d
         )
         datePickerDialog.show()
     }
 
-    private suspend fun updateBottomSheetState(bottomSheetScaffoldState: BottomSheetScaffoldState, bottomSheetState: BottomSheetValue) {
+    private suspend fun updateBottomSheetState(
+        bottomSheetScaffoldState: BottomSheetScaffoldState,
+        bottomSheetState: BottomSheetValue
+    ) {
         if (bottomSheetState == BottomSheetValue.Collapsed) {
             bottomSheetScaffoldState.bottomSheetState.collapse()
         } else {
@@ -849,7 +888,7 @@ class MainActivity : ComponentActivity() {
                         viewModel.setProjectFilter(true)
                     })
                     Text(
-                        text = stringResource(R.string.filter_show_device) + " " +  BuildImageUtils.device,
+                        text = stringResource(R.string.filter_show_device) + " " + BuildImageUtils.device,
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(end = 12.dp)
                     )
@@ -964,7 +1003,9 @@ class MainActivity : ComponentActivity() {
                             viewModel.setQueryDateAfter(queryDateAfter)
                         })
                         Text(
-                            text = stringResource(R.string.filter_since) + " " + localDateFormat.format(queryDateAfter),
+                            text = stringResource(R.string.filter_since) + " " + localDateFormat.format(
+                                queryDateAfter
+                            ),
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(end = 12.dp)
                         )
