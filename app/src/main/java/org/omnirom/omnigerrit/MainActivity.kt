@@ -80,8 +80,9 @@ import org.omnirom.omnigerrit.ui.theme.OmniGerritTheme
 import org.omnirom.omnigerrit.ui.theme.isTablet
 import org.omnirom.omnigerrit.utils.BuildImageUtils
 import org.omnirom.omniota.model.RetrofitManager
-import java.text.DateFormat
-import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
@@ -91,8 +92,8 @@ class MainActivity : ComponentActivity() {
     private var changesPager: LazyPagingItems<Change>? = null
     private lateinit var changesListState: LazyListState
 
-    lateinit var localDateTimeFormat: DateFormat
-    lateinit var localDateFormat: DateFormat
+    lateinit var localDateTimeFormat: DateTimeFormatter
+    lateinit var localDateFormat: DateTimeFormatter
     private val snackbarHostState = SnackbarHostState()
     private val changeDetailScrollState = ScrollState(0)
 
@@ -111,12 +112,12 @@ class MainActivity : ComponentActivity() {
 
         val use24Hour = android.text.format.DateFormat.is24HourFormat(this)
         val dateTimePattern = if (use24Hour) "MMM dd, yyyy HH:mm z" else "MMM dd, yyyy h:mm a z"
-        localDateTimeFormat = SimpleDateFormat(dateTimePattern, Locale.getDefault())
-        localDateTimeFormat.timeZone = TimeZone.getTimeZone("UTC")
+        localDateTimeFormat = DateTimeFormatter.ofPattern(dateTimePattern, Locale.getDefault()).withZone(
+            ZoneId.of("UTC"))
 
         val datePattern = "MMM dd, yyyy"
-        localDateFormat = SimpleDateFormat(datePattern, Locale.getDefault())
-        localDateFormat.timeZone = TimeZone.getTimeZone("UTC")
+        localDateFormat = DateTimeFormatter.ofPattern(datePattern, Locale.getDefault()).withZone(
+            ZoneId.of("UTC"))
 
         lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -320,7 +321,7 @@ class MainActivity : ComponentActivity() {
 
         var itemMenuExpanded by remember { mutableStateOf(false) }
 
-        val date = localDateTimeFormat.format(changeTime)
+        val date = localDateTimeFormat.format(Instant.ofEpochMilli(changeTime))
         Row(
             modifier = Modifier
                 .padding(top = 4.dp, bottom = 4.dp)
@@ -674,7 +675,7 @@ class MainActivity : ComponentActivity() {
                                                 style = MaterialTheme.typography.titleMedium
                                             )
                                             Text(
-                                                text = localDateTimeFormat.format(change.updatedInMillis),
+                                                text = localDateTimeFormat.format(Instant.ofEpochMilli(change.updatedInMillis)),
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
@@ -973,9 +974,9 @@ class MainActivity : ComponentActivity() {
                         })
                         Text(
                             text = stringResource(R.string.filter_since_device_build) + " " + localDateFormat.format(
-                                Device.getBuildDateInMillis(
+                                Instant.ofEpochMilli(Device.getBuildDateInMillis(
                                     applicationContext
-                                ),
+                                )),
                             ),
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(end = 12.dp)
@@ -1004,7 +1005,7 @@ class MainActivity : ComponentActivity() {
                         })
                         Text(
                             text = stringResource(R.string.filter_since) + " " + localDateFormat.format(
-                                queryDateAfter
+                                Instant.ofEpochMilli(queryDateAfter)
                             ),
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(end = 12.dp)

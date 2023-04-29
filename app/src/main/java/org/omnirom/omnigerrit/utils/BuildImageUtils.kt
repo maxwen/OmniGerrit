@@ -22,8 +22,6 @@ import org.omnirom.omnigerrit.model.BuildImage
 import org.omnirom.omnigerrit.model.Version
 import org.omnirom.omnigerrit.retrofit.OmniOtaApi
 import org.omnirom.omniota.model.RetrofitManager
-import java.text.SimpleDateFormat
-import java.util.*
 
 
 object BuildImageUtils {
@@ -33,25 +31,8 @@ object BuildImageUtils {
     var device: String = ""
     var buildType: String = ""
     var version: Version = Version("0")
-
-    val otaDateFormat by lazy {
-        initDateFormat()
-    }
-    val otaDateTimeFormat by lazy {
-        initDateTimeFormat()
-    }
-
-    private fun initDateTimeFormat(): SimpleDateFormat {
-        val format = SimpleDateFormat("yyyyMMddHHmm")
-        format.timeZone = TimeZone.getTimeZone("UTC")
-        return format
-    }
-
-    private fun initDateFormat(): SimpleDateFormat {
-        val format = SimpleDateFormat("yyyyMMdd")
-        format.timeZone = TimeZone.getTimeZone("UTC")
-        return format
-    }
+    const val otaDateFormat = "yyyyMMdd"
+    const val otaDateTimeFormat = "yyyyMMddHHmm"
 
     suspend fun getDeviceBuilds(): List<BuildImage> {
         LogUtils.d(TAG, "getDeviceBuilds")

@@ -9,7 +9,9 @@ import org.omnirom.omnigerrit.utils.LogUtils
 import org.w3c.dom.Element
 import org.w3c.dom.Node
 import java.io.InputStream
-import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.*
 import javax.xml.parsers.DocumentBuilderFactory
 
@@ -32,16 +34,12 @@ object ChangeFilter {
     private val thisDeviceProjectList = mutableListOf<String>()
     val deviceMapLoaded = MutableStateFlow<Boolean>(false)
 
-    private fun initDateTimeFormat(): SimpleDateFormat {
-        val format = SimpleDateFormat("yyyy-MM-dd HH:mm")
-        format.timeZone = TimeZone.getTimeZone("UTC")
-        return format
+    private fun initDateTimeFormat(): DateTimeFormatter {
+        return DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.nnnnnnnnn").withZone(ZoneId.of("UTC"))
     }
 
-    private fun initQueryDateTimeFormat(): SimpleDateFormat {
-        val format = SimpleDateFormat("\"yyyy-MM-dd+HH:mm:ss\"")
-        format.timeZone = TimeZone.getTimeZone("UTC")
-        return format
+    private fun initQueryDateTimeFormat(): DateTimeFormatter {
+        return DateTimeFormatter.ofPattern("\"yyyy-MM-dd HH:mm:ss\"").withZone(ZoneId.of("UTC"))
     }
 
     enum class Status {
@@ -70,7 +68,7 @@ object ChangeFilter {
             q.add("message:" + queryFilter.queryString)
         }
         if (queryFilter.queryDateAfter != 0L) {
-            q.add("after:" + gerritQueryDateTimeFormat.format(queryFilter.queryDateAfter))
+            q.add("after:" + gerritQueryDateTimeFormat.format(Instant.ofEpochMilli(queryFilter.queryDateAfter)))
         }
         when (queryFilter.queryStatus) {
             Status.Merged -> q.add("status:merged")

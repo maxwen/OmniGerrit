@@ -1,6 +1,11 @@
 package org.omnirom.omnigerrit.model
 
 import androidx.annotation.Keep
+import org.omnirom.omnigerrit.utils.BuildImageUtils
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 
 /*"id": "demo~master~Idaf5e098d70898b7119f6f4af5a6c13343d64b57",
 "project": "demo",
@@ -33,11 +38,13 @@ data class Change(
     constructor(buildImage: BuildImage) : this(
         subject = "Build " + buildImage.getDevice() + " " + buildImage.getBuildType(),
         id = "-1",
-        updated = ChangeFilter.gerritDateTimeFormat.format(buildImage.getBuildDateInMillis())
+        updated = ChangeFilter.gerritDateTimeFormat.format(Instant.ofEpochMilli(buildImage.getBuildDateInMillis()))
     )
 
     val updatedInMillis by lazy {
-        ChangeFilter.gerritDateTimeFormat.parse(updated)?.time?:0
+        LocalDateTime.parse(updated, ChangeFilter.gerritDateTimeFormat).toInstant(
+            ZoneOffset.UTC
+        ).toEpochMilli()
     }
 
     fun isBuildChange() = id == "-1"

@@ -19,9 +19,11 @@ package org.omnirom.omnigerrit.model
 
 import androidx.annotation.Keep
 import org.omnirom.omnigerrit.utils.BuildImageUtils
-import java.text.ParseException
-import java.text.SimpleDateFormat
-import java.util.*
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
 
 @Keep
 data class BuildImage(val filename: String, val timestamp: Long, val size: Long) :
@@ -52,10 +54,12 @@ data class BuildImage(val filename: String, val timestamp: Long, val size: Long)
         if (buildDate.isNotEmpty()) {
             return try {
                 // new format
-                BuildImageUtils.otaDateTimeFormat.parse(buildDate)?.time ?: 0
-            } catch (e: ParseException) {
+                LocalDateTime.parse(buildDate, DateTimeFormatter.ofPattern(BuildImageUtils.otaDateTimeFormat)).toInstant(
+                    ZoneOffset.UTC).toEpochMilli()
+            } catch (e: DateTimeParseException) {
                 // fallback to old format
-                BuildImageUtils.otaDateFormat.parse(buildDate)?.time ?: 0
+                LocalDate.parse(buildDate, DateTimeFormatter.ofPattern(BuildImageUtils.otaDateFormat)).atTime(0,0).toInstant(
+                    ZoneOffset.UTC).toEpochMilli()
             }
         }
         return 0
