@@ -1,4 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">OmniGerrit</string>
+    <string name="search_hint_text">Insira mais para Pesquisar</string>
+    <string name="show_in_gerrit">Ver no Gerrit</string>
+    <string name="show_available_builds">Mostrar compilações disponíveis</string>
+    <string name="show_since_this_change">Exibir desde essa mudança</string>
+    <string name="no_network_connection">Sem internet</string>
+    <string name="tab_message_text">Mensagem</string>
+    <string name="tab_details_text">Detalhes</string>
+    <string name="tab_more_text">Mais</string>
+    <string name="details_project_title">Projeto\u003a</string>
+    <string name="details_branch_title">Branch\u003a</string>
+    <string name="details_owner_title">Proprietário\u003a</string>
+    <string name="details_updated_title">Atualizado\u003a</string>
+    <string name="details_number_title">Número\u003a</string>
+    <string name="button_show_title">Mostrar</string>
+    <string name="filter_show_all">Mostrar tudo</string>
+    <string name="filter_show_device">"Mostrar dispositivo"</string>
+    <string name="filter_since_device_build">Desde a compilação do dispositivo</string>
+    <string name="filter_since">Desde</string>
+    <string name="filter_select_date">Selecionar data</string>
+    <string name="filter_branch">Branch</string>
+    <string name="filter_status">Status:</string>
 </resources>

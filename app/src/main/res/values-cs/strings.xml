@@ -1,2 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources></resources>
+<resources>
+    <string name="app_name">OmniGerrit</string>
+    <string name="search_hint_text">Zadejte slovo, které se má shodovat</string>
+    <string name="show_in_gerrit">Zobrazit na Gerritu</string>
+    <string name="show_available_builds">Zobrazit dostupná sestavení</string>
+    <string name="show_since_this_change">Zobrazit od této změny</string>
+    <string name="no_network_connection">Žádné připojení k síti</string>
+    <string name="tab_message_text">Zpráva</string>
+    <string name="tab_details_text">Podrobnosti</string>
+    <string name="tab_more_text">Více</string>
+    <string name="details_project_title">Projekt\u003a</string>
+    <string name="details_branch_title">Větev\u003a</string>
+    <string name="details_owner_title">Vlastník\u003a</string>
+    <string name="details_updated_title">Aktualizováno\u003a</string>
+    <string name="details_number_title">Číslo\u003a</string>
+    <string name="button_show_title">Zobrazit</string>
+    <string name="filter_show_all">Zobrazit vše</string>
+    <string name="filter_show_device">"Zobrazit zařízení"</string>
+    <string name="filter_since_device_build">Od sestavení zařízení</string>
+    <string name="filter_since">Od</string>
+    <string name="filter_select_date">Vybrat datum</string>
+    <string name="filter_branch">Větev</string>
+    <string name="filter_status">Stav</string>
+</resources>
