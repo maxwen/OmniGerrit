@@ -110,7 +110,7 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         val use24Hour = android.text.format.DateFormat.is24HourFormat(this)
-        val dateTimePattern = if (use24Hour) "MMM dd, yyyy H:m z" else "MMM dd, yyyy h:m a z"
+        val dateTimePattern = if (use24Hour) "MMM dd, yyyy HH:mm z" else "MMM dd, yyyy h:mm a z"
         localDateTimeFormat = SimpleDateFormat(dateTimePattern, Locale.getDefault())
         localDateTimeFormat.timeZone = TimeZone.getTimeZone("UTC")
 
