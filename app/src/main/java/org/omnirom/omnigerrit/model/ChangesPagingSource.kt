@@ -44,13 +44,17 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
             val pageIndex = startKey
 
             val queryResultList = mutableListOf<Change>()
-            if (viewModel.isConnected.value && viewModel.buildsMapLoaded.value && ChangeFilter.deviceMapLoaded.value) {
+            var itemsBefore = 0;
+            if (viewModel.isConnected.value && viewModel.changeListReady.value) {
                 fillResultList(queryResultList)
+            } else {
+                itemsBefore = PAGE_SIZE
             }
 
             val newCount = queryResultList.size
             val prevKey = if (pageIndex == 0) null else pageIndex - 1
             val nextKey = if (queryResultList.isEmpty()) null else pageIndex + 1
+            val itemsAfter = 0
 
             LogUtils.d(
                 TAG,
@@ -60,6 +64,8 @@ class ChangesPagingSource(private val viewModel: MainViewModel) :
                 data = queryResultList,
                 prevKey = prevKey,
                 nextKey = nextKey,
+                itemsAfter = itemsAfter,
+                itemsBefore = itemsBefore,
             )
         } catch (e: Exception) {
             LogUtils.e(TAG, "load " + e.message, e)

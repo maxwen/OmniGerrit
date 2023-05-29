@@ -33,7 +33,6 @@ class MainViewModel() : ViewModel() {
     val triggerReload = MutableSharedFlow<Boolean>()
 
     var buildsMap = mapOf<Long, BuildImage>()
-    val buildsMapLoaded = MutableStateFlow<Boolean>(false)
 
     private val initialIsConnected by lazy {
         NetworkUtils.connectivityObserver.peekStatus()
@@ -62,6 +61,9 @@ class MainViewModel() : ViewModel() {
         ChangeFilter.QueryFilter()
     )
 
+    var changeListReady = MutableStateFlow<Boolean>(false)
+
+
     init {
         viewModelScope.launch {
             projectFilter.value = Settings.isProjectFilter(true)
@@ -80,17 +82,7 @@ class MainViewModel() : ViewModel() {
         }
 
         if (isConnected.value) {
-            viewModelScope.launch {
-                withContext(Dispatchers.IO) {
-                    initDeviceBuildSync()
-                    ChangeFilter.loadProjectFilterConfigFile()
-                    if (!ChangeFilter.hasDeviceConfig()) {
-                        showSnackbarMessage("No device config for " + BuildImageUtils.device)
-                    }
-                    loadBranchesSync()
-                    triggerReload.emit(true)
-                }
-            }
+            initDeviceBuilds()
         }
     }
 
@@ -98,8 +90,8 @@ class MainViewModel() : ViewModel() {
         return Pager(
             config = PagingConfig(
                 pageSize = ChangesPagingSource.PAGE_SIZE,
-                enablePlaceholders = false,
-                initialLoadSize = ChangesPagingSource.PAGE_SIZE
+                enablePlaceholders = true,
+                initialLoadSize = ChangesPagingSource.PAGE_SIZE * 2
             ),
             pagingSourceFactory = { ChangesPagingSource(this) }
         ).flow.cachedIn(viewModelScope)
@@ -153,22 +145,24 @@ class MainViewModel() : ViewModel() {
     private fun initDeviceBuilds() {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                initDeviceBuildSync()
+                changeListReady.value = false
+                triggerReload.emit(true)
+                buildsMap =
+                    BuildImageUtils.getDeviceBuildsMap(BuildImageUtils.getDeviceBuilds())
+                LogUtils.d(TAG, "buildsMap = " + buildsMap)
                 ChangeFilter.loadProjectFilterConfigFile()
                 if (!ChangeFilter.hasDeviceConfig()) {
                     showSnackbarMessage("No device config for " + BuildImageUtils.device)
                 }
-                loadBranchesSync()
+                val branches = gerritApi.getBranches("android_vendor_omni")
+                if (branches.isSuccessful && branches.body() != null) {
+                    val branchList = branches.body()!!
+                    LogUtils.d(TAG, "branches = " + branchList)
+                }
+                changeListReady.value = true
                 triggerReload.emit(true)
             }
         }
-    }
-
-    private suspend fun initDeviceBuildSync() {
-        buildsMap =
-            BuildImageUtils.getDeviceBuildsMap(BuildImageUtils.getDeviceBuilds())
-        LogUtils.d(TAG, "buildsMap = " + buildsMap)
-        buildsMapLoaded.value = true
     }
 
     fun setQueryString(text: String) {
@@ -208,21 +202,5 @@ class MainViewModel() : ViewModel() {
             projectFilter.value,
             queryBranch.value, queryProject = ""
         )
-    }
-
-    private suspend fun loadBranchesSync() {
-        val branches = gerritApi.getBranches("android_vendor_omni")
-        if (branches.isSuccessful && branches.body() != null) {
-            val branchList = branches.body()!!
-            LogUtils.d(TAG, "branches = " + branchList)
-        }
-    }
-
-    private fun loadBranches() {
-        if (isConnected.value) {
-            viewModelScope.launch {
-                loadBranchesSync()
-            }
-        }
     }
 }

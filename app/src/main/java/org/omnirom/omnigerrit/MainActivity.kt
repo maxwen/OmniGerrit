@@ -6,18 +6,20 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
-import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.appcompat.view.ContextThemeWrapper
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
@@ -28,7 +30,6 @@ import androidx.compose.material3.*
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -38,28 +39,28 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
@@ -79,6 +80,7 @@ import org.omnirom.omnigerrit.model.MainViewModel
 import org.omnirom.omnigerrit.ui.theme.OmniGerritTheme
 import org.omnirom.omnigerrit.ui.theme.isTablet
 import org.omnirom.omnigerrit.utils.BuildImageUtils
+import org.omnirom.omnigerrit.utils.LogUtils
 import org.omnirom.omniota.model.RetrofitManager
 import java.time.Instant
 import java.time.ZoneId
@@ -90,7 +92,7 @@ class MainActivity : ComponentActivity() {
     val TAG = "MainActivity"
     private val viewModel by viewModels<MainViewModel>()
     private var changesPager: LazyPagingItems<Change>? = null
-    private lateinit var changesListState: LazyListState
+    private var changesListState: LazyListState? = null
 
     lateinit var localDateTimeFormat: DateTimeFormatter
     lateinit var localDateFormat: DateTimeFormatter
@@ -112,17 +114,21 @@ class MainActivity : ComponentActivity() {
 
         val use24Hour = android.text.format.DateFormat.is24HourFormat(this)
         val dateTimePattern = if (use24Hour) "MMM dd, yyyy HH:mm z" else "MMM dd, yyyy h:mm a z"
-        localDateTimeFormat = DateTimeFormatter.ofPattern(dateTimePattern, Locale.getDefault()).withZone(
-            ZoneId.of("UTC"))
+        localDateTimeFormat =
+            DateTimeFormatter.ofPattern(dateTimePattern, Locale.getDefault()).withZone(
+                ZoneId.of("UTC")
+            )
 
         val datePattern = "MMM dd, yyyy"
         localDateFormat = DateTimeFormatter.ofPattern(datePattern, Locale.getDefault()).withZone(
-            ZoneId.of("UTC"))
+            ZoneId.of("UTC")
+        )
 
         lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.triggerReload.collectLatest {
                     changesPager?.refresh()
+                    changesListState?.scrollToItem(0)
                 }
             }
         }
@@ -141,6 +147,7 @@ class MainActivity : ComponentActivity() {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.queryFilter.collectLatest {
                     changesPager?.refresh()
+                    changesListState?.scrollToItem(0)
                 }
             }
         }
@@ -150,6 +157,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @OptIn(ExperimentalFoundationApi::class)
     @Composable
     fun Main() {
         OmniGerritTheme {
@@ -160,7 +168,7 @@ class MainActivity : ComponentActivity() {
             changesListState = rememberLazyListState()
             val queryString by viewModel.queryString.collectAsStateWithLifecycle()
             val topAppBarColor =
-                if (changesListState.firstVisibleItemIndex != 0 || changesListState.isScrollInProgress) MaterialTheme.colorScheme.surfaceColorAtElevation(
+                if (changesListState?.firstVisibleItemIndex != 0 || changesListState?.isScrollInProgress == true) MaterialTheme.colorScheme.surfaceColorAtElevation(
                     elevation = 8.dp
                 ) else MaterialTheme.colorScheme.surface
             Surface(
@@ -189,8 +197,20 @@ class MainActivity : ComponentActivity() {
                                         leadingIcon = {
                                             Icon(
                                                 Icons.Outlined.Search,
-                                                contentDescription = null,
+                                                contentDescription = "",
                                                 tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                            )
+                                        },
+                                        trailingIcon = {
+                                            Icon(
+                                                painterResource(id = R.drawable.ic_close),
+                                                contentDescription = "",
+                                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                modifier = Modifier.combinedClickable(onClick = {
+                                                    viewModel.setQueryString(
+                                                        ""
+                                                    )
+                                                })
                                             )
                                         },
                                         placeholder = {
@@ -257,31 +277,17 @@ class MainActivity : ComponentActivity() {
     fun Changes(bottomSheetScaffoldState: BottomSheetScaffoldState) {
         Column(modifier = Modifier.padding(start = 10.dp, end = 10.dp)) {
             val connected by viewModel.isConnected.collectAsStateWithLifecycle()
-            val buildsMapLoaded by viewModel.buildsMapLoaded.collectAsStateWithLifecycle()
 
             if (connected) {
-                LazyColumn(state = changesListState) {
+                LogUtils.d(TAG, "LazyColumn")
+
+                LazyColumn(state = changesListState!!) {
                     itemsIndexed(items = changesPager!!) { index, change ->
-                        val changeTime = change!!.updatedInMillis
-                        ChangeItem(index, change, changeTime, bottomSheetScaffoldState)
-                    }
-                    when {
-                        changesPager!!.loadState.refresh is LoadState.Loading -> {
-                            item { LoadingView(modifier = Modifier.fillParentMaxSize()) }
-                        }
-
-                        changesPager!!.loadState.append is LoadState.Loading -> {
-                            item { LoadingView(modifier = Modifier.fillParentMaxSize()) }
-                        }
-
-                        changesPager!!.loadState.refresh is LoadState.Error -> {
-                        }
-
-                        changesPager!!.loadState.append is LoadState.Error -> {
-                        }
-
-                        !buildsMapLoaded -> {
-                            item { LoadingView(modifier = Modifier.fillParentMaxSize()) }
+                        if (change != null) {
+                            val changeTime = change.updatedInMillis
+                            ChangeItem(index, change, changeTime, bottomSheetScaffoldState)
+                        } else {
+                            ShimmerChangeItem()
                         }
                     }
                 }
@@ -330,17 +336,22 @@ class MainActivity : ComponentActivity() {
                 .combinedClickable(onClick = {
                     coroutineScope.launch {
                         // scroll up if behind bottom sheet
-                        if (isLandscapeSpacing()) {
-                            changesListState.animateScrollToItem(0)
-                        } else {
-                            val visibleItems =
-                                (changesListState.layoutInfo.viewportSize.height / changesListState.layoutInfo.visibleItemsInfo[0].size) - 1
-                            if (index - changesListState.firstVisibleItemIndex > visibleItems / 2) {
-                                changesListState.animateScrollToItem(0.coerceAtLeast(index - visibleItems / 2))
+                        changesListState?.let {
+                            if (isLandscapeSpacing()) {
+                                it.animateScrollToItem(0)
+                            } else {
+                                val visibleItems =
+                                    (it.layoutInfo.viewportSize.height / it.layoutInfo.visibleItemsInfo[0].size) - 1
+                                if (index - it.firstVisibleItemIndex > visibleItems / 2) {
+                                    it.animateScrollToItem(0.coerceAtLeast(index - visibleItems / 2))
+                                }
                             }
+                            updateBottomSheetState(
+                                bottomSheetScaffoldState,
+                                BottomSheetValue.Expanded
+                            )
+                            changeDetailScrollState.scrollTo(0)
                         }
-                        updateBottomSheetState(bottomSheetScaffoldState, BottomSheetValue.Expanded)
-                        changeDetailScrollState.scrollTo(0)
                     }
                     viewModel.loadChange(change)
                 }, onLongClick = {
@@ -465,6 +476,46 @@ class MainActivity : ComponentActivity() {
             CircularProgressIndicator()
         }
     }
+
+    @Composable
+    fun ShimmerChangeItem() {
+        val bgColor = MaterialTheme.colorScheme.surfaceColorAtElevation(
+            1.dp
+        )
+        Row(
+            modifier = Modifier
+                .padding(top = 4.dp, bottom = 4.dp)
+                .background(bgColor, shape = RoundedCornerShape(size = 8.dp))
+                .heightIn(min = 88.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier.padding(
+                    start = 10.dp,
+                    end = 10.dp,
+                    top = 20.dp,
+                    bottom = 20.dp
+                )
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(20.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .shimmerEffect(),
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 15.dp)
+                        .height(15.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .shimmerEffect(),
+                )
+            }
+        }
+    }
+
 
     @Composable
     fun ChangeDetails() {
@@ -647,9 +698,11 @@ class MainActivity : ComponentActivity() {
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.padding(start = dimensionResource(
-                                                    id = R.dimen.details_start_padding
-                                                ))
+                                                modifier = Modifier.padding(
+                                                    start = dimensionResource(
+                                                        id = R.dimen.details_start_padding
+                                                    )
+                                                )
                                             )
                                         }
                                         if (!change.owner.name.isNullOrEmpty()) {
@@ -663,9 +716,11 @@ class MainActivity : ComponentActivity() {
                                                     style = MaterialTheme.typography.bodyMedium,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis,
-                                                    modifier = Modifier.padding(start = dimensionResource(
-                                                        id = R.dimen.details_start_padding
-                                                    ))
+                                                    modifier = Modifier.padding(
+                                                        start = dimensionResource(
+                                                            id = R.dimen.details_start_padding
+                                                        )
+                                                    )
                                                 )
                                             }
                                         }
@@ -675,13 +730,19 @@ class MainActivity : ComponentActivity() {
                                                 style = MaterialTheme.typography.titleMedium
                                             )
                                             Text(
-                                                text = localDateTimeFormat.format(Instant.ofEpochMilli(change.updatedInMillis)),
+                                                text = localDateTimeFormat.format(
+                                                    Instant.ofEpochMilli(
+                                                        change.updatedInMillis
+                                                    )
+                                                ),
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.padding(start = dimensionResource(
-                                                    id = R.dimen.details_start_padding
-                                                ))
+                                                modifier = Modifier.padding(
+                                                    start = dimensionResource(
+                                                        id = R.dimen.details_start_padding
+                                                    )
+                                                )
                                             )
                                         }
                                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -694,9 +755,11 @@ class MainActivity : ComponentActivity() {
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.padding(start = dimensionResource(
-                                                    id = R.dimen.details_start_padding
-                                                ))
+                                                modifier = Modifier.padding(
+                                                    start = dimensionResource(
+                                                        id = R.dimen.details_start_padding
+                                                    )
+                                                )
                                             )
                                         }
                                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -709,9 +772,11 @@ class MainActivity : ComponentActivity() {
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.padding(start = dimensionResource(
-                                                    id = R.dimen.details_start_padding
-                                                ))
+                                                modifier = Modifier.padding(
+                                                    start = dimensionResource(
+                                                        id = R.dimen.details_start_padding
+                                                    )
+                                                )
                                             )
                                         }
                                     }
@@ -974,9 +1039,11 @@ class MainActivity : ComponentActivity() {
                         })
                         Text(
                             text = stringResource(R.string.filter_since_device_build) + " " + localDateFormat.format(
-                                Instant.ofEpochMilli(Device.getBuildDateInMillis(
-                                    applicationContext
-                                )),
+                                Instant.ofEpochMilli(
+                                    Device.getBuildDateInMillis(
+                                        applicationContext
+                                    )
+                                ),
                             ),
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(end = 12.dp)
@@ -1090,4 +1157,34 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
+
+fun Modifier.shimmerEffect(): Modifier = composed {
+    var size by remember {
+        mutableStateOf(IntSize.Zero)
+    }
+    val bgColor = MaterialTheme.colorScheme.secondaryContainer.value
+    val transition = rememberInfiniteTransition()
+    val startOffsetX by transition.animateFloat(
+        initialValue = -size.width.toFloat(),
+        targetValue = size.width.toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, 0)
+        )
+    )
+
+    background(
+        brush = Brush.linearGradient(
+            colors = listOf(
+                Color(bgColor),
+                Color(MaterialTheme.colorScheme.onSecondaryContainer.value),
+                Color(bgColor),
+            ),
+            start = Offset(startOffsetX, 0F),
+            end = Offset(startOffsetX + size.width.toFloat(), 0F)
+        )
+    )
+        .onGloballyPositioned {
+            size = it.size
+        }
 }
